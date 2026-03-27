@@ -292,11 +292,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   .home-layout{display:flex;flex-direction:column-reverse;gap:14px;margin-top:14px}
   #home-map{height:320px}
   .well-cards{
-    display:grid;grid-auto-flow:column;grid-auto-columns:88%;
-    overflow-x:auto;gap:10px;padding:0 2px 6px 0;
-    scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch
+    display:flex;flex-direction:column;
+    overflow:visible;gap:10px;padding:0
   }
-  .wov{scroll-snap-align:start;min-height:106px;padding:16px}
+  .wov{width:100%;min-height:98px;padding:16px}
   .wov-name{font-size:14px}
   .wov-meta{font-size:11px}
   .wov-elev{font-size:18px}
@@ -339,7 +338,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   <div class="token-card">
     <div class="token-kicker">Secure Access</div>
     <div class="token-title">Enter Your Geokon API Token</div>
-    <div class="token-body">This app stores your token only in this browser on this device using local storage.</div>
+    <div class="token-body">This app stores your token only in this browser on this device using local storage. It is not embedded in the file, so you can safely publish the app code without your private key.</div>
     <input class="token-input" id="tokenInput" type="password" placeholder="Paste Geokon API token"/>
     <div class="token-actions">
       <button class="token-btn primary" type="button" onclick="saveApiToken()">Save Token</button>
