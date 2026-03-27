@@ -1,0 +1,2368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#0b0f14"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Groundwater Monitor"/>
+<title>Groundwater Monitor — Formosa Mine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://d3js.org/d3.v7.js"></script>
+<style>
+:root{
+  --bg:#0b0f14;--surface:#111821;--surface2:#16202c;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --accent:#4fa3e0;--text:#e4edf5;--muted:#6a8099;
+  --danger:#e05a4f;--success:#4fada3;--warn:#e0a84f;
+  --radius:16px;--font:'IBM Plex Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:0.4}
+.aurora{position:fixed;top:-40%;left:50%;transform:translateX(-50%);width:900px;height:600px;background:radial-gradient(ellipse at center,rgba(79,163,224,0.10) 0%,rgba(126,200,245,0.05) 40%,transparent 70%);border-radius:50%;pointer-events:none;animation:auroraFloat 12s ease-in-out infinite alternate;z-index:0}
+@keyframes auroraFloat{0%{transform:translateX(-50%) scale(1);opacity:0.6}100%{transform:translateX(-50%) scale(1.15);opacity:1}}
+.aurora.alert-mode{background:radial-gradient(ellipse at center,rgba(224,90,79,0.12) 0%,rgba(224,90,79,0.05) 40%,transparent 70%)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes ripple{0%{transform:scale(0.6);opacity:1}100%{transform:scale(2.4);opacity:0}}
+
+/* ── TOPBAR ── */
+.topbar{position:sticky;top:0;z-index:200;background:rgba(11,15,20,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between}
+.topbar-brand{display:flex;align-items:center;gap:14px}
+.topbar-logo{font-family:var(--mono);font-size:12px;letter-spacing:0.12em;color:var(--text);text-transform:uppercase}
+.topbar-sub{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.08em}
+.topbar-right{display:flex;align-items:center;gap:20px}
+.topbar-btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:20px;padding:6px 12px;cursor:pointer;transition:border-color 0.15s,color 0.15s,background 0.15s}
+.topbar-btn:hover{border-color:var(--border2);color:var(--text);background:rgba(255,255,255,0.06)}
+.live-pill{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:20px;padding:4px 12px 4px 8px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 7px var(--success);animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+.live-dot.loading{background:var(--warn);box-shadow:0 0 7px var(--warn)}
+.live-dot.error{background:var(--danger);box-shadow:0 0 7px var(--danger);animation:none}
+#lastUpdate{font-family:var(--mono);font-size:10px;color:var(--muted)}
+
+/* ── ALERT BANNER ── */
+#alertBanner{display:none;background:rgba(224,90,79,0.1);border-bottom:1px solid rgba(224,90,79,0.3);padding:10px 28px;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;color:#f0a09a;text-align:center}
+#alertBanner.show{display:block}
+
+/* ── TABS ── */
+.tab-bar{background:rgba(11,15,20,0.6);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:0 28px;display:flex;overflow-x:auto;position:sticky;top:54px;z-index:190}
+.tab-bar::-webkit-scrollbar{height:2px}.tab-bar::-webkit-scrollbar-thumb{background:#1f2d3d}
+.tab-btn{padding:14px 20px;font-family:var(--font);font-size:13px;font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:color 0.2s,border-color 0.2s;display:flex;align-items:center;gap:8px}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
+.ts{width:6px;height:6px;border-radius:50%;flex-shrink:0;transition:background 0.3s}
+.ts.online{background:var(--success);box-shadow:0 0 5px var(--success);animation:pulse 3s infinite}
+.ts.offline{background:#2a3a4a}
+.ts.alerting{background:var(--danger);box-shadow:0 0 5px var(--danger);animation:pulse 1s infinite}
+
+/* ── PAGES ── */
+.page{display:none}.page.active{display:block}
+.container{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 28px 80px}
+
+/* ── WELL PAGE HEADER ── */
+.well-header{padding:36px 0 24px;animation:fadeUp 0.5s ease both}
+.well-header h1{font-size:clamp(24px,3vw,34px);font-weight:600;letter-spacing:-0.02em;line-height:1.1}
+.well-header-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:10px}
+
+/* ── INLINE ALERT ── */
+.inline-alert{display:none;background:rgba(224,90,79,0.08);border:1px solid rgba(224,90,79,0.25);border-radius:12px;padding:14px 20px;margin-bottom:24px;animation:fadeUp 0.4s ease both}
+.inline-alert.show{display:block}
+.inline-alert-label{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--danger);margin-bottom:5px}
+.inline-alert-body{font-size:13px;color:#f0a09a;line-height:1.6}
+.inline-alert-body strong{color:#f5c5c0}
+
+/* ── KEY METRICS ── */
+.key-metrics{display:flex;gap:0;margin-bottom:28px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;animation:fadeUp 0.5s 0.05s ease both}
+.metric-item{flex:1;padding:22px 26px;border-right:1px solid var(--border);background:var(--surface)}
+.metric-item:last-child{border-right:none}
+.metric-label{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+.metric-val{font-size:30px;font-weight:600;letter-spacing:-0.02em;line-height:1;color:var(--text)}
+.metric-val.alert-val{color:#f0a09a}
+.metric-unit{font-size:13px;font-weight:400;color:var(--muted);margin-left:4px}
+.metric-sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px}
+@media(max-width:600px){.key-metrics{flex-direction:column}.metric-item{border-right:none;border-bottom:1px solid var(--border)}.metric-item:last-child{border-bottom:none}}
+
+/* ── CHART PANELS ── */
+.chart-section{margin-bottom:24px;animation:fadeUp 0.5s 0.1s ease both}
+.chart-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.chart-header{padding:18px 22px 0;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.chart-title{font-size:14px;font-weight:600;letter-spacing:-0.01em}
+.chart-hint{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
+.chart-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.range-btns{display:flex;gap:3px}
+.rbtn{font-family:var(--mono);font-size:11px;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:0.06em;transition:all 0.15s}
+.rbtn:hover{border-color:var(--border2);color:var(--text)}
+.rbtn.active{background:rgba(79,163,224,0.12);border-color:rgba(79,163,224,0.35);color:var(--accent)}
+.thr-toggle{font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid rgba(224,90,79,0.3);background:rgba(224,90,79,0.08);color:#f0a09a;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s}
+.thr-toggle.off{border-color:var(--border);background:transparent;color:var(--muted)}
+.chart-body{padding:14px 20px 20px;position:relative}
+.chart-svg-wrap{width:100%;overflow:hidden}
+.zoom-reset{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--accent);background:rgba(79,163,224,0.08);border:1px solid rgba(79,163,224,0.2);border-radius:6px;padding:4px 10px;cursor:pointer;display:none;position:absolute;top:18px;right:24px}
+.zoom-reset.visible{display:block}
+.offline-chart{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted);font-family:var(--mono);font-size:12px;gap:10px}
+.axis path,.axis line{stroke:rgba(255,255,255,0.06)}
+.axis text{fill:var(--muted);font-family:var(--mono);font-size:10px}
+.threshold-line{stroke:var(--danger);stroke-width:1.5;stroke-dasharray:5,4;opacity:0.75}
+
+/* ── TOOLTIP ── */
+.chart-tooltip{position:fixed;pointer-events:none;z-index:1000;opacity:0;transition:opacity 0.12s;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:11px 15px;font-family:var(--mono);font-size:11px;min-width:155px;box-shadow:0 8px 28px rgba(0,0,0,0.5)}
+.tip-date{color:var(--muted);font-size:10px;letter-spacing:0.06em;margin-bottom:7px;text-transform:uppercase}
+.tip-row{display:flex;justify-content:space-between;gap:18px;margin-bottom:3px;color:var(--muted)}
+.tip-row:last-child{margin-bottom:0}
+.tip-row span:last-child{color:var(--text);font-weight:500}
+.crosshair{stroke:rgba(255,255,255,0.12);stroke-width:1;pointer-events:none;opacity:0}
+
+/* ── HOME PAGE ── */
+.home-layout{display:grid;grid-template-columns:3fr 2fr;gap:18px;margin-top:20px;animation:fadeUp 0.5s ease both;align-items:start}
+@media(max-width:820px){.home-layout{grid-template-columns:1fr}}
+#home-map{height:420px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+.well-cards{display:flex;flex-direction:column;gap:8px;padding-right:2px}
+.well-cards::-webkit-scrollbar{width:3px}.well-cards::-webkit-scrollbar-thumb{background:#1f2d3d;border-radius:2px}
+.wov{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:14px 18px;cursor:pointer;transition:border-color 0.2s,transform 0.15s;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.wov:hover{border-color:var(--border2);transform:translateX(2px)}
+.wov.alerting{border-color:rgba(224,90,79,0.4);background:rgba(224,90,79,0.04)}
+.wov-left{}
+.wov-name{font-weight:600;font-size:13px;margin-bottom:3px;display:flex;align-items:center;gap:7px}
+.wov-meta{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.wov-right{text-align:right;flex-shrink:0}
+.wov-elev{font-size:18px;font-weight:600;letter-spacing:-0.01em;display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.wov-elev.alert-val{color:#f0a09a}
+.wov-elevlabel{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:1px}
+.wov-trend{font-size:20px;line-height:1;opacity:0.9}
+.wov-trend.rising{color:var(--success)}
+.wov-trend.falling{color:var(--accent)}
+
+/* ── MAP MARKER DOTS ── */
+.map-dot-wrap{position:relative;width:14px;height:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.map-dot{width:12px;height:12px;border-radius:50%;position:relative;z-index:2;flex-shrink:0}
+.map-dot-ring{position:absolute;inset:-4px;border-radius:50%;animation:ringPulse 2.5s ease-out infinite;z-index:1;border:1.5px solid transparent}
+@keyframes ringPulse{0%{transform:scale(0.8);opacity:1}100%{transform:scale(2.4);opacity:0}}
+.map-label{background:rgba(11,15,20,0.85);border-radius:6px;padding:5px 9px;font-family:'DM Mono',monospace;white-space:nowrap;cursor:pointer;min-width:110px;pointer-events:auto}
+.map-label-name{font-size:11px;font-weight:500;margin-bottom:2px}
+.map-label-elev{font-size:10px;color:#fff}
+.map-label-anchor{position:relative;width:0;height:0;overflow:visible}
+.map-label-dynamic{position:absolute;left:0;top:0;will-change:transform;transition:transform 0.14s ease-out,border-color 0.2s}
+.map-leader-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.map-leader-line{fill:none;stroke-width:1.5;stroke-linecap:round;opacity:0.9}
+
+/* ── LAYER CONTROL ── */
+.leaflet-control-layers{background:rgba(17,24,33,0.95)!important;border:1px solid rgba(255,255,255,0.1)!important;border-radius:8px!important;color:#e4edf5!important}
+.leaflet-control-layers-toggle{background-color:rgba(17,24,33,0.95)!important}
+.leaflet-control-layers label{color:#e4edf5!important;font-family:'DM Mono',monospace!important;font-size:11px!important}
+.leaflet-control-attribution{background:rgba(11,15,20,0.7)!important;color:#2a4a60!important;font-size:9px!important}
+.leaflet-control-attribution a{color:#2a6080!important}
+
+/* â”€â”€ TOKEN GATE â”€â”€ */
+.token-gate{position:fixed;inset:0;z-index:1200;background:rgba(6,10,16,0.88);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:24px}
+.token-gate.show{display:flex}
+.token-card{width:min(100%,420px);background:linear-gradient(180deg,rgba(17,24,33,0.98),rgba(11,15,20,0.98));border:1px solid var(--border2);border-radius:20px;padding:24px 22px;box-shadow:0 28px 80px rgba(0,0,0,0.45)}
+.token-kicker{font-family:var(--mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+.token-title{font-size:24px;font-weight:600;line-height:1.15;margin-bottom:10px}
+.token-body{font-size:14px;line-height:1.7;color:var(--muted);margin-bottom:16px}
+.token-input{width:100%;font-family:var(--mono);font-size:12px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:12px 14px;border-radius:12px}
+.token-input:focus{outline:none;border-color:rgba(79,163,224,0.45)}
+.token-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.token-btn{display:inline-flex;align-items:center;justify-content:center;font-family:var(--font);font-size:13px;font-weight:600;border-radius:10px;padding:11px 16px;cursor:pointer;border:1px solid transparent}
+.token-btn.primary{background:var(--accent);color:var(--bg)}
+.token-btn.secondary{background:transparent;color:var(--muted);border-color:var(--border)}
+.token-note{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:12px;line-height:1.6}
+.token-status{min-height:18px;margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+/* ── INFO TRIGGER ── */
+.info-trigger{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:7px 14px;background:transparent;transition:all 0.15s;margin-top:6px}
+.info-trigger:hover{border-color:var(--border2);color:var(--text)}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:30px;max-width:540px;width:100%;max-height:85vh;overflow-y:auto;position:relative;animation:fadeUp 0.22s ease both}
+.modal-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:4px 8px;border-radius:6px;transition:color 0.15s}
+.modal-close:hover{color:var(--text)}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:5px}
+.modal-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:22px}
+.modal table{width:100%}
+.modal td{font-family:var(--mono);font-size:12px;padding:6px 0;border-bottom:1px solid var(--border);vertical-align:top}
+.modal td:first-child{color:var(--muted);width:52%;padding-right:10px}
+.modal td:last-child{color:var(--text)}
+.modal tr:last-child td{border-bottom:none}
+.modal-section{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin:18px 0 8px}
+
+/* ── OFFLINE NOTICE ── */
+.offline-notice{border:1px dashed rgba(255,255,255,0.07);border-radius:10px;padding:13px 17px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:18px;text-align:center}
+
+/* ── EXPORT TAB ── */
+.export-container{max-width:860px}
+.export-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px 28px;margin-bottom:20px;animation:fadeUp 0.5s ease both}
+.export-section-title{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:600px){.export-grid{grid-template-columns:1fr}}
+.check-group{display:flex;flex-direction:column;gap:8px}
+.check-item{display:flex;align-items:center;gap:9px;font-size:13px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;transition:border-color 0.15s,background 0.15s}
+.check-item:hover{border-color:var(--border2);background:rgba(255,255,255,0.02)}
+.check-item.selected{border-color:rgba(79,163,224,0.35);background:rgba(79,163,224,0.06)}
+.check-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.check-item-label{font-size:13px;color:var(--text)}
+.check-item-sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:1px}
+.export-select{font-family:var(--mono);font-size:12px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:8px 12px;border-radius:8px;width:100%;cursor:pointer;appearance:none;-webkit-appearance:none}
+.export-select:focus{outline:none;border-color:rgba(79,163,224,0.4)}
+.export-btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font);font-size:13px;font-weight:600;color:var(--bg);background:var(--accent);border:none;border-radius:9px;padding:11px 24px;cursor:pointer;transition:opacity 0.15s;letter-spacing:-0.01em}
+.export-btn:hover{opacity:0.88}
+.export-btn:disabled{opacity:0.4;cursor:not-allowed}
+.export-status{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:10px;min-height:18px}
+.export-label{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px;display:block}
+.form-row{margin-bottom:14px}
+.date-inputs{display:flex;gap:10px}
+.date-input{font-family:var(--mono);font-size:12px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:8px 12px;border-radius:8px;flex:1;cursor:pointer}
+.date-input:focus{outline:none;border-color:rgba(79,163,224,0.4)}
+/* ── COW CREEK STREAM GAUGE ── */
+.sg-widget{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:32px}
+.sg-widget::before{content:'';display:block;height:2px;background:linear-gradient(90deg,transparent,#3b9edd,#5bb8f5,transparent)}
+.sg-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap}
+.sg-site-label{font-family:var(--mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#3b9edd;margin-bottom:4px}
+.sg-site-name{font-family:var(--font);font-size:20px;font-weight:600;color:var(--text);line-height:1.2}
+.sg-site-id{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px;letter-spacing:0.08em}
+.sg-reading{text-align:right}
+.sg-reading-value{font-family:var(--font);font-size:36px;font-weight:600;color:#5bb8f5;line-height:1;letter-spacing:-0.02em}
+.sg-reading-unit{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-top:3px}
+.sg-reading-time{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
+.sg-stats{display:flex;border-bottom:1px solid var(--border)}
+.sg-stat{flex:1;padding:10px 16px;border-right:1px solid var(--border);text-align:center}
+.sg-stat:last-child{border-right:none}
+.sg-stat-label{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px}
+.sg-stat-value{font-family:var(--font);font-size:15px;font-weight:600;color:var(--text)}
+.sg-stat-value.sg-high{color:#e05a3a}.sg-stat-value.sg-low{color:#a8d8f0}
+.sg-chart-wrap{padding:16px 24px 12px;position:relative}
+.sg-chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.sg-chart-title{font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted)}
+.sg-period-toggle{display:flex;gap:2px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:6px;padding:2px}
+.sg-period-btn{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;border:none;border-radius:4px;background:transparent;color:var(--muted);cursor:pointer;transition:background 0.15s,color 0.15s}
+.sg-period-btn:hover{color:var(--text);background:rgba(59,158,221,0.1)}
+.sg-period-btn.active{background:#3b9edd;color:#fff}
+.sg-zoom-hint{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-top:6px;opacity:0.7}
+.sg-footer{padding:10px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.sg-footer-src{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.05em}
+.sg-footer-src a{color:var(--accent);text-decoration:none}
+.sg-footer-src a:hover{text-decoration:underline}
+.sg-status-dot{width:6px;height:6px;border-radius:50%;background:#3b9edd;display:inline-block;margin-right:5px;animation:sgPulse 2.4s ease-in-out infinite}
+@keyframes sgPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(59,158,221,0.5)}50%{opacity:0.7;box-shadow:0 0 0 5px rgba(59,158,221,0)}}
+.sg-chart-loading{position:absolute;inset:0;background:rgba(17,24,33,0.8);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);z-index:10}
+.sg-error{padding:2rem;text-align:center;font-family:var(--mono);font-size:11px;color:#e05a3a}
+/* ── ALL-WELLS CHART LEGEND ── */
+.home-chart-legend{display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 14px}
+.hcl-btn{font-family:var(--mono);font-size:11px;padding:4px 11px;border-radius:6px;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s;border:1px solid transparent}
+.hcl-btn.hidden{opacity:0.35}
+.spinner{width:15px;height:15px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block;vertical-align:middle}
+</style>
+<style>
+.iphone-app{padding-bottom:env(safe-area-inset-bottom);-webkit-text-size-adjust:100%}
+@media (max-width: 480px){
+  body{font-size:16px}
+  .aurora{top:-48%;width:560px;height:420px;opacity:0.85}
+  .topbar{
+    min-height:68px;height:auto;padding:calc(env(safe-area-inset-top) + 10px) 14px 12px;
+    align-items:flex-start;gap:12px
+  }
+  .topbar-brand{flex:1;min-width:0}
+  .topbar-logo{font-size:11px}
+  .topbar-sub{font-size:9px;line-height:1.4}
+  .topbar-right{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  #fullscreenBtn{display:none}
+  #lastUpdate{display:none}
+  .live-pill{padding:6px 10px;font-size:10px}
+  .tab-bar{
+    top:78px;padding:8px 12px 10px;gap:8px;
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch
+  }
+  .tab-btn{
+    padding:10px 14px;border:1px solid var(--border);border-radius:12px;
+    background:rgba(255,255,255,0.03);font-size:12px;scroll-snap-align:start
+  }
+  .tab-btn.active{
+    background:rgba(79,163,224,0.12);
+    border-color:rgba(79,163,224,0.35);
+    border-bottom-color:rgba(79,163,224,0.35)
+  }
+  .container{padding:0 14px 96px}
+  .home-layout{display:flex;flex-direction:column-reverse;gap:14px;margin-top:14px}
+  #home-map{height:320px}
+  .well-cards{
+    display:grid;grid-auto-flow:column;grid-auto-columns:88%;
+    overflow-x:auto;gap:10px;padding:0 2px 6px 0;
+    scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch
+  }
+  .wov{scroll-snap-align:start;min-height:106px;padding:16px}
+  .wov-name{font-size:14px}
+  .wov-meta{font-size:11px}
+  .wov-elev{font-size:18px}
+  .well-header{padding:22px 0 18px}
+  .well-header h1{font-size:30px}
+  .well-header-sub{flex-wrap:wrap;row-gap:6px}
+  .inline-alert{padding:12px 14px;margin-bottom:18px}
+  .key-metrics{margin-bottom:20px}
+  .metric-item{padding:18px 18px}
+  .metric-val{font-size:28px}
+  .chart-header{padding:16px 16px 0}
+  .chart-controls{width:100%;justify-content:space-between}
+  .range-btns{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
+  .rbtn{padding:9px 0}
+  .thr-toggle{padding:8px 10px}
+  .chart-body{padding:12px 12px 16px}
+  .zoom-reset{top:14px;right:14px}
+  .home-chart-legend{padding:0 12px 14px}
+  .sg-header{padding:16px 16px 12px}
+  .sg-site-name{font-size:18px}
+  .sg-reading{text-align:left}
+  .sg-reading-value{font-size:44px}
+  .sg-stats{display:grid;grid-template-columns:1fr 2fr 1fr}
+  .sg-stat{border-right:none;border-bottom:1px solid var(--border);padding:12px 10px}
+  .sg-stat:nth-last-child(-n+1){border-bottom:none}
+  .sg-chart-wrap{padding:14px 16px 10px}
+  .sg-footer{padding:12px 16px 16px;flex-direction:column;align-items:flex-start}
+  .export-container{max-width:none}
+  .export-section{padding:18px 16px}
+  .date-inputs{flex-direction:column}
+  .modal-overlay{padding:10px}
+  .modal{padding:22px 18px;max-height:90vh}
+  .token-card{padding:20px 18px;border-radius:18px}
+}
+</style>
+</head>
+<body class="iphone-app">
+<div class="aurora" id="aurora"></div>
+<div class="token-gate" id="tokenGate">
+  <div class="token-card">
+    <div class="token-kicker">Secure Access</div>
+    <div class="token-title">Enter Your Geokon API Token</div>
+    <div class="token-body">This app stores your token only in this browser on this device using local storage. It is not embedded in the file, so you can safely publish the app code without your private key.</div>
+    <input class="token-input" id="tokenInput" type="password" placeholder="Paste Geokon API token"/>
+    <div class="token-actions">
+      <button class="token-btn primary" type="button" onclick="saveApiToken()">Save Token</button>
+      <button class="token-btn secondary" type="button" onclick="clearApiToken()">Clear Saved Token</button>
+    </div>
+    <div class="token-status" id="tokenStatus"></div>
+    <div class="token-note">Tip: after you save it once, the token should remain available on this device until browser storage is cleared or you remove it.</div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div>
+      <div class="topbar-logo">Groundwater Monitor</div>
+      <div class="topbar-sub">Formosa Mine · Douglas County, OR</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="topbar-btn" id="tokenBtn" type="button" onclick="openTokenGate()">API Token</button>
+    <button class="topbar-btn" id="fullscreenBtn" type="button" onclick="toggleFullscreen()">Full Screen</button>
+    <div class="live-pill">
+      <div class="live-dot loading" id="liveDot"></div>
+      <span id="liveLabel">Auto-refresh every 10 min</span>
+    </div>
+    <div id="lastUpdate"></div>
+  </div>
+</div>
+
+<!-- ALERT BANNER -->
+<div id="alertBanner">⚠&nbsp;&nbsp;Mine pool elevation at or above Silver Butte Adit threshold — 3,370 ft AMSL</div>
+
+<!-- TABS -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('home')"    id="tab-home">Overview</button>
+  <button class="tab-btn" onclick="switchTab('formosa')"        id="tab-formosa"><span class="ts offline" id="ts-formosa"></span>Formosa 1 Adit</button>
+  <button class="tab-btn" onclick="switchTab('mw8r')"           id="tab-mw8r">   <span class="ts offline" id="ts-mw8r"></span>MW-8R</button>
+  <button class="tab-btn" onclick="switchTab('mw5')"            id="tab-mw5">    <span class="ts offline" id="ts-mw5"></span>MW-5</button>
+  <button class="tab-btn" onclick="switchTab('mw2')"            id="tab-mw2">    <span class="ts offline" id="ts-mw2"></span>MW-2</button>
+  <button class="tab-btn" onclick="switchTab('mw4r')"           id="tab-mw4r">   <span class="ts offline" id="ts-mw4r"></span>MW-4R</button>
+  <button class="tab-btn" onclick="switchTab('export')"         id="tab-export">Export Data</button>
+</div>
+
+<!-- ══ HOME ══ -->
+<div class="page active" id="page-home">
+  <div class="container">
+    <div class="home-layout">
+      <div id="home-map"></div>
+      <div class="well-cards" id="wellCards">
+        <div style="padding:40px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted)"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- All-wells elevation chart -->
+    <div class="chart-section" style="margin-top:24px">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Water Surface Elevation — All Wells</div>
+            <div class="chart-hint">Drag to zoom · Double-click to reset</div>
+          </div>
+          <div class="chart-controls">
+            <button class="thr-toggle off" id="home-thr-btn" onclick="toggleHomeThr()">⚠ Threshold line: OFF</button>
+            <div class="range-btns">
+              <button class="rbtn"        id="home-rbtn-7d"  onclick="changeHomeRange('7d')">7D</button>
+              <button class="rbtn active" id="home-rbtn-30d" onclick="changeHomeRange('30d')">30D</button>
+              <button class="rbtn"        id="home-rbtn-all" onclick="changeHomeRange('all')">All</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-body">
+          <button class="zoom-reset" id="zr-home-elev">Reset zoom</button>
+          <div class="chart-svg-wrap" id="home-elev-chart">
+            <div class="offline-chart"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sg-widget">
+      <div id="sg-inner">
+        <div style="padding:2rem;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.1em">FETCHING STREAM DATA…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ WELL PAGES ══ -->
+<div class="page" id="page-formosa"></div>
+<div class="page" id="page-mw8r"></div>
+<div class="page" id="page-mw5"></div>
+<div class="page" id="page-mw2"></div>
+<div class="page" id="page-mw4r"></div>
+
+<!-- ══ EXPORT PAGE ══ -->
+<div class="page" id="page-export">
+  <div class="container">
+    <div style="padding:36px 0 24px;animation:fadeUp 0.5s ease both">
+      <h1 style="font-size:28px;font-weight:600;letter-spacing:-0.02em">Export Data</h1>
+      <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px">Download raw sensor data as CSV for any combination of wells, parameters, and date range.</p>
+    </div>
+
+    <div class="export-container">
+      <!-- Wells -->
+      <div class="export-section">
+        <div class="export-section-title">Select Wells</div>
+        <div class="check-group" id="exportWellList"></div>
+      </div>
+
+      <!-- Parameters -->
+      <div class="export-section">
+        <div class="export-section-title">Select Parameters</div>
+        <div class="check-group" id="exportParamList">
+          <label class="check-item selected"><input type="checkbox" value="elevation" checked><div><div class="check-item-label">Water Surface Elevation</div><div class="check-item-sub">ft AMSL · polynomial pressure calculation</div></div></label>
+          <label class="check-item selected"><input type="checkbox" value="pressure" checked><div><div class="check-item-label">Water Level Above Sensor</div><div class="check-item-sub">gauge pressure head</div></div></label>
+          <label class="check-item selected"><input type="checkbox" value="temperature" checked><div><div class="check-item-label">Water Temperature</div><div class="check-item-sub">in-well thermistor</div></div></label>
+          <label class="check-item"><input type="checkbox" value="frequency"><div><div class="check-item-label">Raw Frequency</div><div class="check-item-sub">vibrating wire Hz</div></div></label>
+          <label class="check-item"><input type="checkbox" value="resistance"><div><div class="check-item-label">Raw Resistance</div><div class="check-item-sub">thermistor Ω</div></div></label>
+          <label class="check-item selected"><input type="checkbox" value="voltage" checked><div><div class="check-item-label">Battery Voltage</div><div class="check-item-sub">logger diagnostic</div></div></label>
+        </div>
+      </div>
+
+      <!-- Units -->
+      <div class="export-section">
+        <div class="export-section-title">Units</div>
+        <div class="export-grid">
+          <div class="form-row">
+            <span class="export-label">Pressure / Water Level</span>
+            <select class="export-select" id="unitPressure">
+              <option value="ftH2O">ft H₂O</option>
+              <option value="inH2O">in H₂O</option>
+              <option value="psi">psi</option>
+              <option value="kPa">kPa</option>
+              <option value="m">meters H₂O</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <span class="export-label">Temperature</span>
+            <select class="export-select" id="unitTemp">
+              <option value="F" selected>°F</option>
+              <option value="C">°C</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <span class="export-label">Elevation</span>
+            <select class="export-select" id="unitElev">
+              <option value="ft">feet AMSL</option>
+              <option value="m">meters AMSL</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date range -->
+      <div class="export-section">
+        <div class="export-section-title">Date Range</div>
+        <div class="form-row">
+          <span class="export-label">Preset</span>
+          <select class="export-select" id="exportPreset" onchange="applyExportPreset()" style="margin-bottom:10px">
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="1y">Last 1 year</option>
+            <option value="all">All available data</option>
+            <option value="custom">Custom range…</option>
+          </select>
+        </div>
+        <div class="date-inputs" id="customDateRow" style="display:none">
+          <div style="flex:1">
+            <span class="export-label">Start date</span>
+            <input type="date" class="date-input" id="exportStart"/>
+          </div>
+          <div style="flex:1">
+            <span class="export-label">End date</span>
+            <input type="date" class="date-input" id="exportEnd"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Download -->
+      <div class="export-section">
+        <button class="export-btn" id="exportBtn" onclick="runExport()">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 12l-4-4h2.5V2h3v6H12L8 12zm-6 2h12v1.5H2V14z"/></svg>
+          Download CSV
+        </button>
+        <div class="export-status" id="exportStatus"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modalBox">
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div class="chart-tooltip" id="globalTip">
+  <div class="tip-date" id="tipDate"></div>
+  <div id="tipRows"></div>
+</div>
+
+<script>
+'use strict';
+// ══════════════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════════════
+const API_URL    = 'https://data.geokon.com/';
+const API_TOKEN_KEY = 'mine_pool_monitor_geokon_api_token';
+const ALERT_ELEV = 3370.0;
+const OFFLINE_MS = 24 * 3600 * 1000;
+const REFRESH_MS = 10 * 60 * 1000;
+
+// ── Per-well calibration (all unique from screenshots) ──
+// Formula: (A·D² + B·D + C + K·(T1−T0)) × 0.334553 + sensorElev
+// where D = freq² / 1000 (vibrating wire digits)
+// C is auto-calculated: -(A·R0² + B·R0) so output=0 at zero condition
+const MULT = 0.334553; // kPa → ft H2O
+
+const WELLS = [
+  { id:'formosa', name:'Formosa 1 Adit', shortName:'Formosa 1',
+    loggerId:'2201322', sensorId:'1836213',
+    A:-0.0000005471, B:-0.16588, K:-0.07202, R0:8891.5, T0:8.9, sensorElev:3309.34,
+    lat:42.8554489, lng:-123.3825706, minePool:true, color:'#4fa3e0', loggerCh:1 },
+  { id:'mw8r', name:'MW-8R', shortName:'MW-8R',
+    loggerId:'2438725', sensorId:'2239175',
+    A:-0.0000001889, B:-0.10779, K:0.080287, R0:9338.6, T0:5.1, sensorElev:3270.69,
+    lat:42.854423, lng:-123.3818725, minePool:true, color:'#4fada3', loggerCh:1 },
+  { id:'mw5', name:'MW-5', shortName:'MW-5',
+    loggerId:'2201323', sensorId:'2239178',
+    A:-0.0000003712, B:-0.10492, K:0.10504, R0:8700.8, T0:8.9, sensorElev:3249.01,
+    lat:42.8505009, lng:-123.3859039, minePool:false, color:'#a78bfa', loggerCh:1 },
+  { id:'mw2', name:'MW-2', shortName:'MW-2',
+    loggerId:'2565304', sensorId:'2239179',
+    A:-0.0000001682, B:-0.10548, K:-0.066979, R0:8973.3, T0:15.1, sensorElev:3141.29,
+    lat:42.8553914, lng:-123.3835023, minePool:false, color:'#e0a84f', loggerCh:1 },
+  { id:'mw4r', name:'MW-4R', shortName:'MW-4R',
+    loggerId:'2565304', sensorId:'2239176',
+    A:-0.000000281, B:-0.1049, K:0.26143, R0:9316.7, T0:13.4, sensorElev:3011.46,
+    lat:42.8554779, lng:-123.3834248, minePool:false, color:'#e05a4f', loggerCh:1 },
+];
+// Compute C per well
+WELLS.forEach(w => { w.C = -(w.A*w.R0*w.R0 + w.B*w.R0); });
+
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+const S = {};
+WELLS.forEach(w => {
+  S[w.id] = { status:'loading', elev:null, temp:null, volt:null,
+               lastTime:null, range:'30d', loggerInfo:null,
+               freqObs:[], tempObs:[], voltObs:[], resistObs:[] };
+});
+let activeTab='home', reqId=1, homeMap=null, refreshTimer=null;
+let apiToken = '';
+
+// ══════════════════════════════════════════════════════════
+//  MATH
+// ══════════════════════════════════════════════════════════
+const toDigits = hz => hz*hz/1000;
+
+function polyElev(well, hz, tC){
+  const D = toDigits(hz);
+  const kPa = well.A*D*D + well.B*D + well.C + well.K*(tC - well.T0);
+  return kPa * MULT + well.sensorElev;  // ft AMSL water surface
+}
+function polyGauge(well, hz, tC){
+  const D = toDigits(hz);
+  return (well.A*D*D + well.B*D + well.C + well.K*(tC - well.T0)) * MULT; // ft H2O
+}
+
+// Unit conversions
+function cToF(c){ return c*9/5+32; }
+function ftToM(ft){ return ft*0.3048; }
+function gaugeConvert(ftH2O, unit){
+  if(unit==='ftH2O') return ftH2O;
+  if(unit==='inH2O') return ftH2O*12;
+  if(unit==='psi')   return ftH2O*0.433527;
+  if(unit==='kPa')   return ftH2O*2.98907;
+  if(unit==='m')     return ftH2O*0.3048;
+  return ftH2O;
+}
+function elevConvert(ft, unit){ return unit==='m' ? ftToM(ft) : ft; }
+function formatDateInputLocal(date){
+  const y=date.getFullYear();
+  const m=String(date.getMonth()+1).padStart(2,'0');
+  const d=String(date.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+}
+function dateInputToIso(dateStr, endOfDay=false){
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const dt=endOfDay
+    ? new Date(y, m-1, d, 23, 59, 59, 999)
+    : new Date(y, m-1, d, 0, 0, 0, 0);
+  return dt.toISOString();
+}
+function tempValueAtTime(obs, isoTime, fallback){
+  if(!obs.length) return fallback;
+  let best=fallback, bestDiff=Infinity;
+  const target=new Date(isoTime).getTime();
+  for(const item of obs){
+    if(item?.value==null || !item.time) continue;
+    const diff=Math.abs(new Date(item.time).getTime()-target);
+    if(diff<bestDiff){
+      best=item.value;
+      bestDiff=diff;
+      if(diff===0) break;
+    }
+  }
+  return best;
+}
+const chartResizeHandlers = new Map();
+function bindChartResize(containerId, handler){
+  const prev=chartResizeHandlers.get(containerId);
+  if(prev) window.removeEventListener('resize', prev);
+  chartResizeHandlers.set(containerId, handler);
+  window.addEventListener('resize', handler);
+}
+function getStoredApiToken(){
+  return apiToken || localStorage.getItem(API_TOKEN_KEY) || '';
+}
+function updateTokenButton(){
+  const btn=document.getElementById('tokenBtn');
+  if(!btn) return;
+  btn.textContent = getStoredApiToken() ? 'API Token Saved' : 'Enter API Token';
+}
+function openTokenGate(){
+  const gate=document.getElementById('tokenGate');
+  const input=document.getElementById('tokenInput');
+  const status=document.getElementById('tokenStatus');
+  if(status) status.textContent='';
+  if(input) input.value=getStoredApiToken();
+  if(gate) gate.classList.add('show');
+  setTimeout(()=>input?.focus(), 30);
+}
+function closeTokenGate(){
+  document.getElementById('tokenGate')?.classList.remove('show');
+}
+function clearApiToken(){
+  apiToken='';
+  clearTimeout(refreshTimer);
+  localStorage.removeItem(API_TOKEN_KEY);
+  updateTokenButton();
+  document.getElementById('tokenStatus').textContent='Saved token removed from this device.';
+  openTokenGate();
+}
+async function saveApiToken(){
+  const input=document.getElementById('tokenInput');
+  const status=document.getElementById('tokenStatus');
+  const token=(input?.value||'').trim();
+  if(!token){
+    if(status) status.textContent='Enter a valid Geokon API token.';
+    return;
+  }
+  apiToken=token;
+  localStorage.setItem(API_TOKEN_KEY, token);
+  updateTokenButton();
+  if(status) status.textContent='Token saved on this device.';
+  closeTokenGate();
+  await loadAll();
+}
+let mapLabelLayoutFrame = null;
+let mapLeaderSvg = null;
+function rectOverlapArea(a,b){
+  const w=Math.max(0, Math.min(a.right,b.right)-Math.max(a.left,b.left));
+  const h=Math.max(0, Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
+  return w*h;
+}
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+function rectContainsPoint(rect, point, pad=0){
+  return point.x>=rect.left-pad && point.x<=rect.right+pad && point.y>=rect.top-pad && point.y<=rect.bottom+pad;
+}
+function getLabelAnchorPoint(point, rect){
+  return {
+    x: clamp(point.x, rect.left, rect.right),
+    y: clamp(point.y, rect.top, rect.bottom),
+  };
+}
+function scoreLabelCandidate(rect, mapRect, placedRects, pointRects, dotPoints, point, dx, dy){
+  const edgePenalty =
+    Math.max(0, mapRect.left-rect.left) +
+    Math.max(0, rect.right-mapRect.right) +
+    Math.max(0, mapRect.top-rect.top) +
+    Math.max(0, rect.bottom-mapRect.bottom);
+  const overlapPenalty = placedRects.reduce((sum, placed)=>sum+rectOverlapArea(rect, placed), 0);
+  const pointPenalty = pointRects.reduce((sum, dotRect)=>sum+rectOverlapArea(rect, dotRect), 0);
+  const dotCoverPenalty = dotPoints.reduce((sum, otherPoint)=>sum+(rectContainsPoint(rect, otherPoint, 8)?1:0), 0);
+  const anchor=getLabelAnchorPoint(point, rect);
+  const lineLength=Math.hypot(anchor.x-point.x, anchor.y-point.y);
+  const distancePenalty = Math.hypot(dx, dy);
+  return overlapPenalty*1000 + pointPenalty*1600 + dotCoverPenalty*4000 + edgePenalty*250 + distancePenalty + lineLength*0.8;
+}
+function scheduleMapLabelLayout(){
+  if(!homeMap) return;
+  if(mapLabelLayoutFrame!=null) cancelAnimationFrame(mapLabelLayoutFrame);
+  mapLabelLayoutFrame=requestAnimationFrame(()=>{
+    mapLabelLayoutFrame=null;
+    layoutMapLabels();
+  });
+}
+function layoutMapLabels(){
+  if(!homeMap) return;
+  const mapEl=homeMap.getContainer();
+  if(!mapEl) return;
+  const mapRect={left:0, top:0, right:mapEl.clientWidth, bottom:mapEl.clientHeight};
+  const gap=12;
+  const placedRects=[];
+  const dotPoints=WELLS.map(w=>({id:w.id, ...homeMap.latLngToContainerPoint([w.lat,w.lng])}));
+  const pointRects=dotPoints.map(p=>({left:p.x-12, top:p.y-12, right:p.x+12, bottom:p.y+12}));
+  const leaderLines=[];
+  const wellsByDensity=[...WELLS].sort((a,b)=>{
+    const sa=homeMap.latLngToContainerPoint([a.lat,a.lng]);
+    const sb=homeMap.latLngToContainerPoint([b.lat,b.lng]);
+    const minA=Math.min(...WELLS.filter(w=>w.id!==a.id).map(w=>sa.distanceTo(homeMap.latLngToContainerPoint([w.lat,w.lng]))));
+    const minB=Math.min(...WELLS.filter(w=>w.id!==b.id).map(w=>sb.distanceTo(homeMap.latLngToContainerPoint([w.lat,w.lng]))));
+    return minA-minB;
+  });
+
+  wellsByDensity.forEach(w=>{
+    const label=document.getElementById('mlabel-'+w.id);
+    if(!label) return;
+    const point=homeMap.latLngToContainerPoint([w.lat,w.lng]);
+    const width=label.offsetWidth || 110;
+    const height=label.offsetHeight || 34;
+    const candidates=[
+      {dx: gap,            dy: -height-gap/2},
+      {dx: gap,            dy: gap/2},
+      {dx:-width-gap,      dy: -height-gap/2},
+      {dx:-width-gap,      dy: gap/2},
+      {dx:-width/2,        dy: -height-gap},
+      {dx:-width/2,        dy: gap},
+      {dx: gap,            dy: -height/2},
+      {dx:-width-gap,      dy: -height/2},
+    ];
+
+    let best=null;
+    candidates.forEach(c=>{
+      const rect={
+        left:point.x + c.dx,
+        top:point.y + c.dy,
+        right:point.x + c.dx + width,
+        bottom:point.y + c.dy + height,
+      };
+      const score=scoreLabelCandidate(rect, mapRect, placedRects, pointRects, dotPoints.filter(p=>p.id!==w.id), point, c.dx, c.dy);
+      if(!best || score<best.score) best={...c, rect, score};
+    });
+
+    label.style.transform=`translate(${best.dx}px, ${best.dy}px)`;
+    placedRects.push(best.rect);
+    const anchor=getLabelAnchorPoint(point, best.rect);
+    const leaderLen=Math.hypot(anchor.x-point.x, anchor.y-point.y);
+    if(leaderLen>18) leaderLines.push({well:w, point, anchor});
+  });
+  renderMapLeaderLines(leaderLines);
+}
+function renderMapLeaderLines(lines){
+  if(!mapLeaderSvg) return;
+  mapLeaderSvg.setAttribute('viewBox', `0 0 ${homeMap.getContainer().clientWidth} ${homeMap.getContainer().clientHeight}`);
+  mapLeaderSvg.innerHTML=lines.map(({well, point, anchor})=>
+    `<path class="map-leader-line" stroke="${well.color}" d="M ${point.x.toFixed(1)} ${point.y.toFixed(1)} L ${anchor.x.toFixed(1)} ${anchor.y.toFixed(1)}" />`
+  ).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+//  API
+// ══════════════════════════════════════════════════════════
+async function geokon(method, params={}){
+  const token = getStoredApiToken();
+  if(!token) throw new Error('Geokon API token required');
+  const res = await fetch(API_URL, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({jsonrpc:'2.0',method,id:reqId++,params:{apiToken:token,...params}})
+  });
+  const d = await res.json();
+  if(d.error) throw new Error(d.error.message);
+  return d.result;
+}
+function parseObs(res){
+  if(!res?.observations) return [];
+  if(Array.isArray(res.observations)) return res.observations;
+  const out=[];
+  for(const [t,v] of Object.entries(res.observations))
+    (Array.isArray(v)?v:[v]).forEach((x,i)=>out.push({time:t,metric:'m'+i,value:x}));
+  return out;
+}
+
+// Date-range to startTime/endTime params
+function dateRangeParams(range){
+  const now = new Date();
+  let start = null;
+  if(range==='7d')  start = new Date(now - 7*86400e3);
+  if(range==='30d') start = new Date(now - 30*86400e3);
+  if(range==='1y')  start = new Date(now - 365*86400e3);
+  // 'all' = no filter
+  const params = { page:-1, pageSize:5000 };
+  if(start) params.startTime = start.toISOString();
+  return params;
+}
+
+// ══════════════════════════════════════════════════════════
+//  LOAD WELL
+// ══════════════════════════════════════════════════════════
+async function loadWell(well, range){
+  const s = S[well.id];
+  s.status = 'loading';
+  try {
+    const rp = dateRangeParams(range || s.range);
+    const [logRes, rawRes, diagRes, resistRes] = await Promise.all([
+      geokon('getLogger',{serialId:well.loggerId}).catch(()=>null),
+      geokon('getDataSeries',{serialId:well.loggerId, filters:{loggerChannel:well.loggerCh},
+        metrics:['frequency','temperature'], units:['Hz','°C'], format:2, ...rp})
+        .catch(e=>({_err:e.message})),
+      geokon('getDataSeries',{serialId:well.loggerId, filters:{diagnostic:true},
+        metrics:['voltage'], units:['V'], format:2, ...rp})
+        .catch(()=>null),
+      geokon('getDataSeries',{serialId:well.loggerId, filters:{loggerChannel:well.loggerCh},
+        metrics:['resistance'], units:['Ω'], format:2, ...rp})
+        .catch(()=>null),
+    ]);
+    s.loggerInfo = logRes;
+    if(rawRes?._err) throw new Error(rawRes._err);
+
+    const all    = parseObs(rawRes);
+    const freqs  = all.filter(o=>o.metric==='frequency');
+    const temps  = all.filter(o=>o.metric==='temperature');
+    const volts  = diagRes   ? parseObs(diagRes).filter(o=>o.metric==='voltage')    : [];
+    const resists= resistRes ? parseObs(resistRes).filter(o=>o.metric==='resistance'): [];
+
+    s.freqObs=freqs; s.tempObs=temps; s.voltObs=volts; s.resistObs=resists;
+
+    if(!freqs.length){ s.status='offline'; return; }
+
+    const f0=freqs[0].value, ts=freqs[0].time;
+    const t0=tempValueAtTime(temps, ts, well.T0);
+    s.elev    = polyElev(well,f0,t0);
+    s.temp    = t0;
+    s.volt    = volts[0]?.value??null;
+    s.lastTime= ts;
+    s.status  = (Date.now()-new Date(ts).getTime())>OFFLINE_MS ? 'offline':'online';
+  } catch(e){
+    s.status='error'; s.elev=null;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  LOAD ALL & REFRESH LOOP
+// ══════════════════════════════════════════════════════════
+async function loadAll(){
+  if(!getStoredApiToken()){
+    setLiveStatus('error');
+    openTokenGate();
+    return;
+  }
+  setLiveStatus('loading');
+  clearTimeout(refreshTimer);
+  await Promise.all(WELLS.map(w=>loadWell(w,S[w.id].range)));
+  setLiveStatus(WELLS.some(w=>S[w.id].status==='error')?'error':'ok');
+  document.getElementById('lastUpdate').textContent =
+    'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  updateAlertBanner();
+  updateAllTabDots();
+  renderHomeCards();
+  // Match map height to well cards column height (+ small buffer)
+  requestAnimationFrame(()=>{
+    const cards=document.getElementById('wellCards');
+    const map=document.getElementById('home-map');
+    if(cards&&map){
+      const h=cards.getBoundingClientRect().height;
+      if(h>60) map.style.height=Math.max(h+16,280)+'px';
+      if(homeMap) homeMap.invalidateSize();
+    }
+  });
+  updateMapMarkers();
+  if(activeTab==='home') drawHomeElevChart();
+  const aw=WELLS.find(w=>w.id===activeTab);
+  if(aw) renderWellPage(aw);
+  refreshTimer = setTimeout(loadAll, REFRESH_MS);
+}
+
+function setLiveStatus(st){
+  const d=document.getElementById('liveDot'), l=document.getElementById('liveLabel');
+  d.className='live-dot'+(st==='loading'?' loading':st==='error'?' error':'');
+  if(st==='loading') l.textContent='Loading…';
+  else if(st==='error') l.textContent='Error — Auto-refresh every 10 min';
+  else l.textContent='Auto-refresh every 10 min';
+}
+
+// ══════════════════════════════════════════════════════════
+//  ALERT BANNER
+// ══════════════════════════════════════════════════════════
+function updateAlertBanner(){
+  const hit=WELLS.filter(w=>w.minePool).some(w=>S[w.id].elev!=null&&S[w.id].elev>=ALERT_ELEV);
+  document.getElementById('alertBanner').classList.toggle('show',hit);
+  document.getElementById('aurora').classList.toggle('alert-mode',hit);
+}
+
+// ══════════════════════════════════════════════════════════
+//  TAB DOTS
+// ══════════════════════════════════════════════════════════
+function updateAllTabDots(){
+  WELLS.forEach(w=>{
+    const el=document.getElementById('ts-'+w.id); if(!el) return;
+    const s=S[w.id];
+    const isAlert=w.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
+    el.className='ts '+(isAlert?'alerting':s.status==='online'?'online':'offline');
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  HOME OVERVIEW CARDS
+// ══════════════════════════════════════════════════════════
+// Format number with thousand comma and fixed decimals
+function fmtNum(v, dec=2){
+  if(v==null) return '—';
+  return Number(v).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function getWellTrend(well){
+  const s=S[well.id];
+  if(s.status!=='online' || s.freqObs.length<2) return null;
+  const trendObs=s.freqObs.slice(0, Math.min(4, s.freqObs.length));
+  const latest=trendObs[0];
+  const oldest=trendObs[trendObs.length-1];
+  if(!latest || !oldest) return null;
+  const latestTemp=tempValueAtTime(s.tempObs, latest.time, well.T0);
+  const oldestTemp=tempValueAtTime(s.tempObs, oldest.time, well.T0);
+  const latestElev=polyElev(well, latest.value, latestTemp);
+  const oldestElev=polyElev(well, oldest.value, oldestTemp);
+  const delta=latestElev-oldestElev;
+  if(Math.abs(delta)<0.01) return null;
+  return delta>0 ? 'rising' : 'falling';
+}
+
+function renderHomeCards(){
+  document.getElementById('wellCards').innerHTML = WELLS.map(w=>{
+    const s=S[w.id];
+    const isAlert=w.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
+    const elevStr=s.elev!=null?fmtNum(s.elev,2):'—';
+    const isOnline=s.status==='online';
+    const tsClass=isAlert?'alerting':isOnline?'online':'offline';
+    const meta=!isOnline
+      ? (s.lastTime?'Last: '+fmtShort(s.lastTime):'No data')
+      : fmtShort(s.lastTime);
+    const trend=getWellTrend(w);
+    const trendHtml=trend
+      ? `<span class="wov-trend ${trend}" aria-hidden="true">${trend==='rising'?'↑':'↓'}</span>`
+      : '';
+    // Offline dot: muted red (#b94040) instead of grey
+    const dotColor=isAlert?'var(--danger)':isOnline?'var(--success)':'#b94040';
+    return `<div class="wov ${isAlert?'alerting':''}" onclick="switchTab('${w.id}')">
+      <div class="wov-left">
+        <div class="wov-name" style="color:${w.color}">
+          <span class="ts ${tsClass}" style="width:7px;height:7px;background:${dotColor};${isOnline||isAlert?'box-shadow:0 0 5px '+dotColor:''}"></span>${w.name}
+          ${isAlert?'<span style="font-family:var(--mono);font-size:9px;color:var(--danger);margin-left:2px">⚠</span>':''}
+        </div>
+        <div class="wov-meta">${isOnline?'Online':'Offline'} · ${meta}</div>
+      </div>
+      <div class="wov-right">
+        <div class="wov-elev ${isAlert?'alert-val':''}">${trendHtml}<span>${elevStr}</span></div>
+        <div class="wov-elevlabel">ft AMSL</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+//  MAP
+// ══════════════════════════════════════════════════════════
+function initMap(){
+  homeMap = L.map('home-map',{zoomControl:true}).setView([42.8535,-123.384],15);
+  const leaderPane = homeMap.createPane('leaderLines');
+  leaderPane.style.zIndex = 590;
+  leaderPane.style.pointerEvents = 'none';
+  mapLeaderSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  mapLeaderSvg.setAttribute('class','map-leader-layer');
+  leaderPane.appendChild(mapLeaderSvg);
+
+  const satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    {attribution:'Imagery © Esri',maxZoom:19}
+  ).addTo(homeMap);
+
+  const topo = L.tileLayer(
+    'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
+    {attribution:'USGS National Map',maxZoom:16}
+  );
+
+  const baseMaps = { 'Satellite': satellite, 'Topographic': topo };
+  L.control.layers(baseMaps, {}, {position:'topright'}).addTo(homeMap);
+
+  WELLS.forEach(w => {
+    // Pulsing dot
+    const dotHtml = `
+      <div class="map-dot-wrap" id="mdot-${w.id}">
+        <div class="map-dot-ring" id="mdot-ring-${w.id}" style="border-color:${w.color}"></div>
+        <div class="map-dot" id="mdot-inner-${w.id}" style="background:${w.color};box-shadow:0 0 6px ${w.color}88"></div>
+      </div>`;
+    const dotIcon = L.divIcon({className:'',html:dotHtml,iconSize:[14,14],iconAnchor:[7,7]});
+    L.marker([w.lat,w.lng],{icon:dotIcon}).addTo(homeMap).on('click',()=>switchTab(w.id));
+
+    const labelHtml = `
+      <div class="map-label-anchor">
+        <div id="mlabel-${w.id}" onclick="switchTab('${w.id}')"
+          class="map-label-dynamic"
+          style="
+            background:rgba(11,15,20,0.90);
+            border:1px solid ${w.color}55;border-radius:6px;
+            padding:4px 9px;font-family:'DM Mono',monospace;
+            white-space:nowrap;cursor:pointer;pointer-events:auto;
+            transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='${w.color}'"
+          onmouseout="this.style.borderColor='${w.color}55'">
+          <div style="font-size:11px;font-weight:500;color:${w.color}">${w.shortName}</div>
+          <div id="mlabel-elev-${w.id}" style="font-size:10px;color:#ffffff">—</div>
+        </div>
+      </div>`;
+    const labelIcon = L.divIcon({className:'',html:labelHtml,iconSize:[0,0],iconAnchor:[0,0]});
+    L.marker([w.lat,w.lng],{icon:labelIcon,interactive:true}).addTo(homeMap);
+  });
+  homeMap.on('zoom move resize', scheduleMapLabelLayout);
+  homeMap.whenReady(scheduleMapLabelLayout);
+}
+
+function updateMapMarkers(){
+  WELLS.forEach(w=>{
+    const s=S[w.id];
+    const isAlert=w.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
+    const isOnline=s.status==='online';
+    const dotColor = isAlert ? '#e05a4f' : isOnline ? '#4fada3' : '#b94040';
+    const inner = document.getElementById('mdot-inner-'+w.id);
+    const ring  = document.getElementById('mdot-ring-'+w.id);
+    if(inner){
+      inner.style.background=dotColor;
+      inner.style.boxShadow=`0 0 6px ${dotColor}88`;
+    }
+    if(ring){
+      ring.style.borderColor=dotColor;
+      ring.style.animationPlayState = (isOnline||isAlert) ? 'running' : 'paused';
+      ring.style.opacity = (isOnline||isAlert) ? '1' : '0';
+    }
+    const elEl=document.getElementById('mlabel-elev-'+w.id);
+    if(elEl){
+      elEl.style.color = isAlert ? '#fca5a5' : '#ffffff';
+      elEl.textContent = s.elev!=null ? fmtNum(s.elev,1)+' ft AMSL'
+                        : s.status==='offline' ? 'Offline' : '—';
+    }
+  });
+  scheduleMapLabelLayout();
+}
+
+// ══════════════════════════════════════════════════════════
+//  WELL PAGE
+// ══════════════════════════════════════════════════════════
+function renderWellPage(well){
+  const s=S[well.id];
+  const page=document.getElementById('page-'+well.id);
+  const isAlert=well.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
+  const offline=s.status!=='online';
+  const margin=s.elev!=null?(ALERT_ELEV-s.elev):null;
+  const elevChartId=`ec-${well.id}`, deltaChartId=`dc-${well.id}`, tempChartId=`tc-${well.id}`, voltChartId=`vc-${well.id}`;
+
+  const metricsHtml=`
+    <div class="key-metrics">
+      <div class="metric-item">
+        <div class="metric-label">Water Surface Elevation</div>
+        <div class="metric-val ${isAlert?'alert-val':''}">
+          ${s.elev!=null?fmtNum(s.elev,2):'—'}<span class="metric-unit">ft AMSL</span>
+        </div>
+        <div class="metric-sub">${s.lastTime?'As of '+fmtShort(s.lastTime):'No data'}</div>
+      </div>
+      ${well.minePool?`
+      <div class="metric-item">
+        <div class="metric-label">Distance to Silver Butte Adit</div>
+        <div class="metric-val ${isAlert?'alert-val':''}">
+          ${margin!=null?fmtNum(margin,2):'—'}<span class="metric-unit">ft</span>
+        </div>
+        <div class="metric-sub">Threshold: 3,370.00 ft AMSL</div>
+      </div>`:''}
+    </div>`;
+
+  const alertHtml=well.minePool?`
+    <div class="inline-alert ${isAlert?'show':''}">
+      <div class="inline-alert-label">⚠ Silver Butte Adit Alert</div>
+      <div class="inline-alert-body">
+        Water surface at <strong>${s.elev!=null?s.elev.toFixed(2):'—'} ft AMSL</strong> —
+        ${isAlert?'at or above':'approaching'} the Silver Butte Adit outflow elevation of
+        <strong>3,370.00 ft AMSL</strong>.
+        ${margin!=null?`<strong>${margin.toFixed(2)} ft</strong> remaining.`:''}
+      </div>
+    </div>`:'';
+
+  // Threshold toggle only for mine pool wells
+  const thrToggle = well.minePool
+    ? `<button class="thr-toggle" id="thr-btn-${well.id}" onclick="toggleThreshold('${well.id}')">⚠ Threshold line: ON</button>`
+    : '';
+
+  page.innerHTML=`
+    <div class="container">
+      <div class="well-header">
+        <h1 style="color:${well.color}">${well.name}</h1>
+        <div class="well-header-sub">
+          <span class="ts ${s.status==='online'?'online':'offline'}" style="width:6px;height:6px"></span>
+          <span>${s.status==='online'?'Online':'Offline'}</span>
+          <span style="color:rgba(106,128,153,0.4)">·</span>
+          <span>Logger ${well.loggerId}</span>
+          <span style="color:rgba(106,128,153,0.4)">·</span>
+          <span>Sensor ${well.sensorId}</span>
+        </div>
+      </div>
+      ${alertHtml}
+      ${offline?'<div class="offline-notice">No data received in the last 24 hours — instrument appears offline.</div>':''}
+      ${metricsHtml}
+
+      <!-- Water Elevation -->
+      <div class="chart-section">
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div><div class="chart-title">Water Surface Elevation</div><div class="chart-hint">Drag to zoom · Double-click to reset</div></div>
+            <div class="chart-controls">
+              ${thrToggle}
+              <div class="range-btns">
+                ${['7d','30d','all'].map(r=>`<button class="rbtn ${s.range===r?'active':''}" onclick="changeRange('${well.id}','${r}')">${r==='7d'?'7D':r==='30d'?'30D':'All'}</button>`).join('')}
+              </div>
+            </div>
+          </div>
+          <div class="chart-body">
+            <button class="zoom-reset" id="zr-${elevChartId}">Reset zoom</button>
+            <div class="chart-svg-wrap" id="${elevChartId}">
+              ${!s.freqObs.length?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily Elevation Change -->
+      <div class="chart-section">
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div><div class="chart-title">Daily Elevation Change</div><div class="chart-hint">Net day-over-day change in water surface elevation</div></div>
+          </div>
+          <div class="chart-body">
+            <button class="zoom-reset" id="zr-${deltaChartId}">Reset zoom</button>
+            <div class="chart-svg-wrap" id="${deltaChartId}">
+              ${computeDailyElevationChangeData(well).length?'' : '<div class="offline-chart"><span style="color:var(--muted)">Not enough daily data available</span></div>'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Temperature -->
+      <div class="chart-section">
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div><div class="chart-title">Water Temperature</div><div class="chart-hint">Drag to zoom · Double-click to reset</div></div>
+            <div class="chart-controls">
+              <button class="thr-toggle" id="tmp-unit-btn-${well.id}" onclick="toggleTempUnit('${well.id}')" style="border-color:rgba(224,168,79,0.35);background:rgba(224,168,79,0.08);color:#e0a84f">${tempUnitState[well.id]==='F'?'°F / °C':'°C / °F'}</button>
+            </div>
+          </div>
+          <div class="chart-body">
+            <button class="zoom-reset" id="zr-${tempChartId}">Reset zoom</button>
+            <div class="chart-svg-wrap" id="${tempChartId}">
+              ${!s.tempObs.length?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Battery Voltage -->
+      <div class="chart-section">
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div><div class="chart-title">Battery Voltage</div><div class="chart-hint">Drag to zoom · Double-click to reset</div></div>
+          </div>
+          <div class="chart-body">
+            <button class="zoom-reset" id="zr-${voltChartId}">Reset zoom</button>
+            <div class="chart-svg-wrap" id="${voltChartId}">
+              ${!s.voltObs.length?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="info-trigger" onclick="openModal('${well.id}')">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm0 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 6.5zm0-2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
+        Device &amp; Calibration Info
+      </button>
+    </div>`;
+
+  // Draw charts
+  if(s.freqObs.length) drawElevChart(well, elevChartId);
+  if(s.freqObs.length) drawDailyDeltaChart(well, deltaChartId);
+  if(s.tempObs.length){
+    const isFah = tempUnitState[well.id]==='F';
+    const tempSeries=[...s.tempObs].reverse()
+      .map(o=>({date:new Date(o.time), val:isFah?cToF(o.value):o.value}))
+      .filter(d=>d.val!=null);
+    drawLineChart(tempChartId, tempSeries, isFah?'°F':'°C', '#e0a84f');
+  }
+  if(s.voltObs.length){
+    const voltSeries=[...s.voltObs].reverse().map(o=>({date:new Date(o.time),val:o.value})).filter(d=>d.val!=null);
+    drawLineChart(`${voltChartId}`,voltSeries,'V','#6a8099');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  THRESHOLD TOGGLE
+// ══════════════════════════════════════════════════════════
+const thrState = {}; // wellId -> bool (true = shown)
+WELLS.filter(w=>w.minePool).forEach(w=>{ thrState[w.id]=true; });
+
+// ── Per-well temperature unit ('F' or 'C') ──
+const tempUnitState = {};
+WELLS.forEach(w=>{ tempUnitState[w.id]='F'; });
+
+function toggleTempUnit(wellId){
+  tempUnitState[wellId] = tempUnitState[wellId]==='F' ? 'C' : 'F';
+  const btn=document.getElementById('tmp-unit-btn-'+wellId);
+  if(btn) btn.textContent = tempUnitState[wellId]==='F' ? '°F / °C' : '°C / °F';
+  // Redraw temperature chart only
+  const s=S[wellId], well=WELLS.find(w=>w.id===wellId);
+  if(!s.tempObs.length||!well) return;
+  const isFah = tempUnitState[wellId]==='F';
+  const series=[...s.tempObs].reverse()
+    .map(o=>({date:new Date(o.time), val:isFah?cToF(o.value):o.value}))
+    .filter(d=>d.val!=null);
+  drawLineChart(`tc-${wellId}`, series, isFah?'°F':'°C', '#e0a84f');
+}
+
+function toggleThreshold(wellId){
+  thrState[wellId] = !thrState[wellId];
+  const btn=document.getElementById('thr-btn-'+wellId);
+  if(btn){
+    btn.textContent=`⚠ Threshold line: ${thrState[wellId]?'ON':'OFF'}`;
+    btn.classList.toggle('off',!thrState[wellId]);
+  }
+  const well=WELLS.find(w=>w.id===wellId);
+  if(well&&S[wellId].freqObs.length) drawElevChart(well,`ec-${wellId}`);
+}
+
+// ══════════════════════════════════════════════════════════
+//  DRAW ELEVATION CHART
+// ══════════════════════════════════════════════════════════
+const pacificDayFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone:'America/Los_Angeles',
+  year:'numeric',
+  month:'2-digit',
+  day:'2-digit'
+});
+
+function getPacificDayKey(date){
+  const parts = pacificDayFormatter.formatToParts(date);
+  const map = Object.fromEntries(parts.filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function dayKeyToDate(dayKey){
+  const [y,m,d] = dayKey.split('-').map(Number);
+  return new Date(y, m-1, d, 12, 0, 0, 0);
+}
+
+function computeDailyElevationChangeData(well){
+  const s=S[well.id];
+  if(!s.freqObs.length) return [];
+  const closes = new Map();
+  [...s.freqObs].reverse().forEach(obs=>{
+    const elev = polyElev(well, obs.value, tempValueAtTime(s.tempObs, obs.time, well.T0));
+    if(!isFinite(elev)) return;
+    closes.set(getPacificDayKey(new Date(obs.time)), elev);
+  });
+  const days = [...closes.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  const out = [];
+  for(let i=1; i<days.length; i++){
+    const [dayKey, elev] = days[i];
+    const [, prevElev] = days[i-1];
+    out.push({ date: dayKeyToDate(dayKey), val: elev-prevElev, dayKey });
+  }
+  return out;
+}
+
+function drawElevChart(well, containerId){
+  const s=S[well.id];
+  const data=[...s.freqObs].reverse().map(f=>{
+    const t=tempValueAtTime(s.tempObs, f.time, well.T0);
+    return {date:new Date(f.time), val:polyElev(well,f.value,t)};
+  }).filter(d=>isFinite(d.val));
+  if(!data.length) return;
+
+  const showThr = well.minePool && thrState[well.id];
+  const thrVal  = showThr ? ALERT_ELEV : null;
+  drawLineChart(containerId, data, 'ft AMSL', well.color, thrVal, '3,370 ft — Silver Butte Adit');
+}
+
+// ══════════════════════════════════════════════════════════
+//  GENERIC D3 LINE CHART WITH BRUSH ZOOM & SMART TOOLTIP
+//  Y axis rescales dynamically when zooming in
+// ══════════════════════════════════════════════════════════
+function drawDailyDeltaChart(well, containerId){
+  const data = computeDailyElevationChangeData(well);
+  const wrap=document.getElementById(containerId);
+  if(!wrap || !data.length) return;
+  wrap.innerHTML='';
+
+  const margin={top:12,right:18,bottom:38,left:68};
+  const totalH=220;
+  const H=totalH-margin.top-margin.bottom;
+  const getW=()=>(wrap.getBoundingClientRect().width||800);
+  let width=getW()-margin.left-margin.right;
+
+  const svg=d3.select(wrap).append('svg')
+    .attr('height',totalH).attr('width',getW()).style('display','block');
+  const defs=svg.append('defs');
+  const clipId='cl-'+containerId;
+  defs.append('clipPath').attr('id',clipId)
+    .append('rect').attr('width',width).attr('height',H+12).attr('y',-6);
+
+  const g=svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+  svg.append('text')
+    .attr('transform', `translate(13, ${margin.top + H/2}) rotate(-90)`)
+    .attr('text-anchor','middle')
+    .attr('fill','var(--muted)')
+    .attr('font-family','var(--mono)')
+    .attr('font-size',10)
+    .attr('letter-spacing','0.06em')
+    .text('ft/day');
+
+  const xExt=d3.extent(data,d=>d.date);
+  let xFull=d3.scaleTime().domain(xExt).range([0,width]);
+  let xCur=xFull.copy();
+  const maxAbs=Math.max(d3.max(data,d=>Math.abs(d.val))||0.05, 0.05);
+  const yScale=d3.scaleLinear().domain([-(maxAbs*1.15), maxAbs*1.15]).range([H,0]).nice();
+  const xAxis=g.append('g').attr('class','axis').attr('transform',`translate(0,${H})`);
+  const yAxis=g.append('g').attr('class','axis');
+  const yGrid=g.append('g');
+  const clipG=g.append('g').attr('clip-path',`url(#${clipId})`);
+  const zeroLine=clipG.append('line')
+    .attr('x1',0).attr('x2',width)
+    .attr('y1',yScale(0)).attr('y2',yScale(0))
+    .attr('stroke','rgba(255,255,255,0.16)').attr('stroke-width',1);
+  const barsG=clipG.append('g');
+  const xhair=clipG.append('line').attr('class','crosshair').attr('y1',0).attr('y2',H);
+
+  function redrawAxes(){
+    const spanDays=(xCur.domain()[1]-xCur.domain()[0])/86400e3;
+    const tickFmt=spanDays>180?d3.timeFormat('%b %Y'):d3.timeFormat('%b %d');
+    xAxis.call(d3.axisBottom(xCur).ticks(6).tickFormat(tickFmt))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    xAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    xAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.call(d3.axisLeft(yScale).ticks(5).tickFormat(v=>v.toFixed(2)))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    yAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yGrid.call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+    yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+    yGrid.select('.domain').remove();
+  }
+
+  function redrawBars(){
+    const barW=Math.max(8, Math.min(28, width/Math.max(data.length, 10)*0.7));
+    barsG.selectAll('rect').data(data).join('rect')
+      .attr('x',d=>xCur(d.date)-barW/2)
+      .attr('width',barW)
+      .attr('y',d=>Math.min(yScale(d.val), yScale(0)))
+      .attr('height',d=>Math.max(1, Math.abs(yScale(d.val)-yScale(0))))
+      .attr('rx',2)
+      .attr('fill',d=>d.val>=0 ? well.color : '#e05a4f')
+      .attr('opacity',0.85);
+    zeroLine.attr('x2',width).attr('y1',yScale(0)).attr('y2',yScale(0));
+  }
+
+  function redraw(){
+    redrawAxes();
+    redrawBars();
+  }
+  redraw();
+
+  let isZoomed=false;
+  const zrBtn=document.getElementById('zr-'+containerId);
+  const brushG=clipG.append('g');
+  const brush=d3.brushX().extent([[0,0],[width,H]]).on('end',ev=>{
+    if(!ev.selection) return;
+    const [p0,p1]=ev.selection;
+    if(Math.abs(p1-p0)<5) return;
+    xCur=xFull.copy().domain([xCur.invert(p0),xCur.invert(p1)]);
+    isZoomed=true;
+    if(zrBtn) zrBtn.classList.add('visible');
+    brushG.call(brush.move,null);
+    redraw();
+  });
+  brushG.call(brush);
+  brushG.select('.overlay').style('cursor','crosshair');
+
+  const tip=document.getElementById('globalTip');
+  const TIP_W=190;
+  brushG.select('.overlay')
+    .on('mousemove.tip',function(ev){
+      const [mx]=d3.pointer(ev,g.node());
+      if(mx<0||mx>width){ tip.style.opacity='0'; xhair.style('opacity',0); return; }
+      const hoverDate=xCur.invert(mx);
+      const closest=data.reduce((a,b)=>Math.abs(a.date-hoverDate)<Math.abs(b.date-hoverDate)?a:b);
+      const cx=xCur(closest.date);
+      xhair.attr('x1',cx).attr('x2',cx).style('opacity',1);
+      document.getElementById('tipDate').textContent=d3.timeFormat('%b %d, %Y')(closest.date);
+      document.getElementById('tipRows').innerHTML=`<div class="tip-row"><span>Change</span><span>${closest.val>=0?'+':''}${closest.val.toFixed(3)} ft</span></div>`;
+      tip.style.opacity='1';
+      const clientX=ev.clientX, winW=window.innerWidth;
+      tip.style.left=(clientX+TIP_W+24>winW ? clientX-TIP_W-12 : clientX+18)+'px';
+      tip.style.top=(ev.clientY-40)+'px';
+    })
+    .on('mouseleave.tip',()=>{
+      tip.style.opacity='0';
+      xhair.style('opacity',0);
+    });
+
+  svg.on('dblclick',()=>{
+    if(!isZoomed) return;
+    xCur=xFull.copy(); isZoomed=false;
+    if(zrBtn) zrBtn.classList.remove('visible');
+    redraw();
+  });
+  if(zrBtn) zrBtn.onclick=()=>{ xCur=xFull.copy(); isZoomed=false; zrBtn.classList.remove('visible'); redraw(); };
+
+  bindChartResize(containerId, ()=>{
+    const nw=getW()-margin.left-margin.right;
+    if(Math.abs(nw-width)<2) return;
+    width=nw;
+    svg.attr('width',getW());
+    xFull.range([0,width]);
+    if(!isZoomed) xCur=xFull.copy();
+    brush.extent([[0,0],[width,H]]); brushG.call(brush);
+    redraw();
+  });
+}
+
+function drawLineChart(containerId, data, unit, lineColor, thresholdVal, thresholdLabel){
+  const wrap=document.getElementById(containerId);
+  if(!wrap||!data.length) return;
+  wrap.innerHTML='';
+
+  const margin={top:12,right:18,bottom:38,left:68};
+  const totalH=230;
+  const H=totalH-margin.top-margin.bottom;
+  const getW=()=>(wrap.getBoundingClientRect().width||800);
+  let width=getW()-margin.left-margin.right;
+
+  const svg=d3.select(wrap).append('svg')
+    .attr('height',totalH).attr('width',getW()).style('display','block');
+
+  const defs=svg.append('defs');
+  const clipId='cl-'+containerId;
+  defs.append('clipPath').attr('id',clipId)
+    .append('rect').attr('width',width).attr('height',H+12).attr('y',-6);
+
+  const gradId='gr-'+containerId;
+  const grad=defs.append('linearGradient').attr('id',gradId)
+    .attr('x1','0').attr('x2','0').attr('y1','0').attr('y2','1');
+  grad.append('stop').attr('offset','0%').attr('stop-color',lineColor).attr('stop-opacity',0.15);
+  grad.append('stop').attr('offset','100%').attr('stop-color',lineColor).attr('stop-opacity',0);
+
+  const g=svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+
+  // Y-axis unit label
+  const yLabel = svg.append('text')
+    .attr('transform', `translate(13, ${margin.top + H/2}) rotate(-90)`)
+    .attr('text-anchor','middle')
+    .attr('fill','var(--muted)')
+    .attr('font-family','var(--mono)')
+    .attr('font-size', 10)
+    .attr('letter-spacing','0.06em')
+    .text(unit);
+
+  // Full x/y extents from all data
+  const allVals=data.map(d=>d.val);
+  const xExt=d3.extent(data,d=>d.date);
+  let xFull=d3.scaleTime().domain(xExt).range([0,width]);
+  let xCur=xFull.copy();
+
+  // Compute Y domain for a given x window, including threshold if shown
+  function computeYDomain(x0, x1){
+    const visible=data.filter(d=>d.date>=x0&&d.date<=x1);
+    const src=visible.length>1?visible:data;
+    const vmin=d3.min(src,d=>d.val), vmax=d3.max(src,d=>d.val);
+    const pad=(vmax-vmin)*0.08||0.5;
+    let ylo=vmin-pad, yhi=vmax+pad;
+    if(thresholdVal!=null){
+      const span=vmax-vmin||1;
+      ylo=Math.min(ylo, thresholdVal-span*0.05);
+      yhi=Math.max(yhi, thresholdVal+span*0.05);
+    }
+    return [ylo, yhi];
+  }
+
+  const yScale=d3.scaleLinear().domain(computeYDomain(xExt[0],xExt[1])).range([H,0]).nice();
+
+  const xAxis=g.append('g').attr('class','axis').attr('transform',`translate(0,${H})`);
+  const yAxis=g.append('g').attr('class','axis');
+
+  // Grid
+  const yGrid=g.append('g')
+    .call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+  yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+  yGrid.select('.domain').remove();
+
+  const clipG=g.append('g').attr('clip-path',`url(#${clipId})`);
+
+  const areaGen=d3.area().x(d=>xCur(d.date)).y0(H).y1(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+  const lineGen=d3.line().x(d=>xCur(d.date)).y(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+
+  const areaPth=clipG.append('path').datum(data).attr('fill',`url(#${gradId})`).attr('d',areaGen);
+  const linePth=clipG.append('path').datum(data).attr('fill','none').attr('stroke',lineColor).attr('stroke-width',1.8).attr('d',lineGen);
+
+  // Threshold
+  let thrLineEl=null;
+  if(thresholdVal!=null){
+    thrLineEl=clipG.append('line').attr('class','threshold-line')
+      .attr('x1',0).attr('x2',width)
+      .attr('y1',yScale(thresholdVal)).attr('y2',yScale(thresholdVal));
+    clipG.append('text')
+      .attr('x',4).attr('y',yScale(thresholdVal)-5)
+      .attr('fill','rgba(224,90,79,0.75)').attr('font-family','var(--mono)').attr('font-size',9)
+      .text(thresholdLabel||String(thresholdVal));
+  }
+
+  const xhair=clipG.append('line').attr('class','crosshair').attr('y1',0).attr('y2',H);
+  const dot=clipG.append('circle').attr('r',4).attr('fill',lineColor)
+    .attr('stroke','var(--bg)').attr('stroke-width',2).style('opacity',0);
+
+  function redrawAxes(){
+    const spanMs=xCur.domain()[1]-xCur.domain()[0];
+    const spanDays=spanMs/86400e3;
+    const tickFmt=spanDays>180?d3.timeFormat('%b %Y'):d3.timeFormat('%b %d');
+    xAxis.call(d3.axisBottom(xCur).ticks(6).tickFormat(tickFmt))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    xAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    xAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.call(d3.axisLeft(yScale).ticks(5).tickFormat(v=>
+      unit==='ft AMSL'?v.toFixed(0):v.toFixed(2)))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    yAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yGrid.call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+    yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+    yGrid.select('.domain').remove();
+  }
+  redrawAxes();
+
+  function redraw(){
+    const [d0,d1]=xCur.domain();
+    yScale.domain(computeYDomain(d0,d1)).nice();
+    areaPth.attr('d',areaGen.x(d=>xCur(d.date)).y1(d=>yScale(d.val)));
+    linePth.attr('d',lineGen.x(d=>xCur(d.date)).y(d=>yScale(d.val)));
+    if(thrLineEl) thrLineEl.attr('x1',0).attr('x2',width)
+      .attr('y1',yScale(thresholdVal)).attr('y2',yScale(thresholdVal));
+    redrawAxes();
+  }
+
+  // Brush zoom
+  let isZoomed=false;
+  const zrBtn=document.getElementById('zr-'+containerId);
+  const brushG=clipG.append('g');
+  const brush=d3.brushX().extent([[0,0],[width,H]]).on('end',ev=>{
+    if(!ev.selection) return;
+    const [p0,p1]=ev.selection;
+    if(Math.abs(p1-p0)<5) return;
+    xCur=xFull.copy().domain([xCur.invert(p0),xCur.invert(p1)]);
+    isZoomed=true;
+    if(zrBtn) zrBtn.classList.add('visible');
+    brushG.call(brush.move,null);
+    redraw();
+  });
+  brushG.call(brush);
+  brushG.select('.overlay').style('cursor','crosshair');
+
+  // Smart tooltip (flips left/right)
+  const tip=document.getElementById('globalTip');
+  const TIP_W=175;
+  brushG.select('.overlay')
+    .on('mousemove.tip',function(ev){
+      const [mx]=d3.pointer(ev,g.node());
+      if(mx<0||mx>width){ tip.style.opacity='0'; return; }
+      const hDate=xCur.invert(mx);
+      const closest=data.reduce((a,b)=>Math.abs(a.date-hDate)<Math.abs(b.date-hDate)?a:b);
+      const cx=xCur(closest.date);
+      xhair.attr('x1',cx).attr('x2',cx).style('opacity',1);
+      dot.attr('cx',cx).attr('cy',yScale(closest.val)).style('opacity',1);
+      document.getElementById('tipDate').textContent=d3.timeFormat('%b %d, %Y %H:%M')(closest.date);
+      const decimals=unit==='ft AMSL'?2:unit==='V'?3:2;
+      const dispVal = unit==='ft AMSL'
+        ? fmtNum(closest.val, 2)
+        : closest.val.toFixed(decimals);
+      document.getElementById('tipRows').innerHTML=
+        `<div class="tip-row"><span>${unit}</span><span>${dispVal}</span></div>`;
+      tip.style.opacity='1';
+      const clientX=ev.clientX, winW=window.innerWidth;
+      if(clientX+TIP_W+24>winW) tip.style.left=(clientX-TIP_W-12)+'px';
+      else                       tip.style.left=(clientX+18)+'px';
+      tip.style.top=(ev.clientY-40)+'px';
+    })
+    .on('mouseleave.tip',()=>{
+      tip.style.opacity='0';
+      xhair.style('opacity',0);
+      dot.style('opacity',0);
+    });
+
+  svg.on('dblclick',()=>{
+    if(!isZoomed) return;
+    xCur=xFull.copy(); isZoomed=false;
+    if(zrBtn) zrBtn.classList.remove('visible');
+    redraw();
+  });
+  if(zrBtn) zrBtn.onclick=()=>{ xCur=xFull.copy(); isZoomed=false; zrBtn.classList.remove('visible'); redraw(); };
+
+  // Responsive
+  bindChartResize(containerId, ()=>{
+    const nw=getW()-margin.left-margin.right;
+    if(Math.abs(nw-width)<2) return;
+    width=nw;
+    svg.attr('width',getW());
+    xFull.range([0,width]);
+    if(!isZoomed) xCur=xFull.copy();
+    brush.extent([[0,0],[width,H]]); brushG.call(brush);
+    if(thrLineEl) thrLineEl.attr('x2',width);
+    yLabel.attr('transform',`translate(13, ${margin.top + H/2}) rotate(-90)`);
+    redraw();
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  CHANGE RANGE
+// ══════════════════════════════════════════════════════════
+async function changeRange(wellId, range){
+  const well=WELLS.find(w=>w.id===wellId);
+  S[wellId].range=range;
+  await loadWell(well,range);
+  renderWellPage(well);
+}
+
+// ══════════════════════════════════════════════════════════
+//  MODAL
+// ══════════════════════════════════════════════════════════
+function openModal(wellId){
+  const well=WELLS.find(w=>w.id===wellId);
+  const s=S[wellId];
+  const lc=s.loggerInfo?.configuration||{}, lp=s.loggerInfo?.properties||{};
+  document.getElementById('modalContent').innerHTML=`
+    <h3>${well.name}</h3>
+    <div class="modal-sub">${well.minePool?'Mine Pool':'Monitoring Well'} · ${well.lat.toFixed(7)}, ${well.lng.toFixed(7)}</div>
+    <div class="modal-section">Logger</div>
+    <table><tbody>
+      <tr><td>Logger Serial</td><td>${well.loggerId}</td></tr>
+      <tr><td>Sensor Serial</td><td>${well.sensorId}</td></tr>
+      <tr><td>Data Type</td><td>${lp.dataTypeDescription||lp.dataType||'—'}</td></tr>
+      <tr><td>Node Type</td><td>${lp.nodeTypeDescription||lp.nodeType||'—'}</td></tr>
+      <tr><td>Power Mode</td><td>${lc.logging?.powerModeDescription||lc.logging?.powerMode||'—'}</td></tr>
+      <tr><td>Last Observation</td><td>${s.lastTime?fmtD(s.lastTime):'—'}</td></tr>
+    </tbody></table>
+    <div class="modal-section">Calibration</div>
+    <table><tbody>
+      <tr><td>Method</td><td>Polynomial · VW Digits (f²÷1000)</td></tr>
+      <tr><td>A</td><td>${well.A}</td></tr>
+      <tr><td>B</td><td>${well.B}</td></tr>
+      <tr><td>C</td><td>${well.C.toFixed(9)}</td></tr>
+      <tr><td>K (thermal)</td><td>${well.K}</td></tr>
+      <tr><td>R₀ (zero digits)</td><td>${well.R0} ≈ ${Math.sqrt(well.R0*1000).toFixed(0)} Hz</td></tr>
+      <tr><td>T₀ (zero temp)</td><td>${well.T0} °C</td></tr>
+      <tr><td>Multiplier</td><td>0.334553 (kPa → ft H₂O)</td></tr>
+      <tr><td>Sensor Elevation</td><td>${well.sensorElev.toFixed(2)} ft AMSL</td></tr>
+    </tbody></table>`;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal(ev){
+  if(ev&&ev.target!==document.getElementById('modalOverlay')) return;
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════
+//  EXPORT TAB
+// ══════════════════════════════════════════════════════════
+function initExportUI(){
+  document.getElementById('exportWellList').innerHTML=WELLS.map(w=>`
+    <label class="check-item selected" id="ewrap-${w.id}">
+      <input type="checkbox" value="${w.id}" checked onchange="toggleCheckItem(this)">
+      <div><div class="check-item-label" style="color:${w.color}">${w.name}</div>
+           <div class="check-item-sub">Logger ${w.loggerId} · Sensor ${w.sensorId}</div></div>
+    </label>`).join('');
+  document.querySelectorAll('#exportParamList .check-item input').forEach(cb=>{
+    cb.addEventListener('change',()=>toggleCheckItem(cb));
+  });
+  // Set default dates
+  const now=new Date();
+  document.getElementById('exportEnd').value=formatDateInputLocal(now);
+  const week=new Date(now-7*86400e3);
+  document.getElementById('exportStart').value=formatDateInputLocal(week);
+}
+
+function toggleCheckItem(cb){
+  const label=cb.closest('.check-item');
+  if(label) label.classList.toggle('selected',cb.checked);
+}
+
+function applyExportPreset(){
+  const val=document.getElementById('exportPreset').value;
+  const customRow=document.getElementById('customDateRow');
+  customRow.style.display=val==='custom'?'flex':'none';
+}
+
+async function runExport(){
+  const btn=document.getElementById('exportBtn');
+  const status=document.getElementById('exportStatus');
+  btn.disabled=true; status.textContent='Fetching data…';
+
+  const selectedWells=Array.from(document.querySelectorAll('#exportWellList input:checked')).map(c=>c.value);
+  const selectedParams=Array.from(document.querySelectorAll('#exportParamList input:checked')).map(c=>c.value);
+  const pressureUnit=document.getElementById('unitPressure').value;
+  const tempUnit=document.getElementById('unitTemp').value;
+  const elevUnit=document.getElementById('unitElev').value;
+  const preset=document.getElementById('exportPreset').value;
+
+  if(!selectedWells.length||!selectedParams.length){
+    status.textContent='Select at least one well and one parameter.';
+    btn.disabled=false; return;
+  }
+
+  // Compute date range
+  const now=new Date();
+  let startTime=null, endTime=null;
+  if(preset==='7d')    startTime=new Date(now-7*86400e3).toISOString();
+  else if(preset==='30d')   startTime=new Date(now-30*86400e3).toISOString();
+  else if(preset==='90d')   startTime=new Date(now-90*86400e3).toISOString();
+  else if(preset==='1y')    startTime=new Date(now-365*86400e3).toISOString();
+  else if(preset==='custom'){
+    const s=document.getElementById('exportStart').value;
+    const e=document.getElementById('exportEnd').value;
+    if(!s||!e){status.textContent='Enter start and end dates.';btn.disabled=false;return;}
+    startTime=dateInputToIso(s,false);
+    endTime=dateInputToIso(e,true);
+  }
+  // 'all' = no time filter
+
+  const apiParams={page:-1,pageSize:5000,format:2};
+  if(startTime) apiParams.startTime=startTime;
+  if(endTime)   apiParams.endTime=endTime;
+
+  const rows=[]; // {time, wellId, wellName, ...values}
+
+  try {
+    for(const wellId of selectedWells){
+      const well=WELLS.find(w=>w.id===wellId);
+      if(!well) continue;
+      status.textContent=`Fetching ${well.name}…`;
+
+      // Determine which raw metrics to fetch
+      const needsFreqTemp = selectedParams.some(p=>['elevation','pressure','frequency'].includes(p))
+                          || selectedParams.includes('temperature');
+      const needsVoltage  = selectedParams.includes('voltage');
+      const needsResist   = selectedParams.includes('resistance');
+
+      const [rawRes, diagRes, resistRes] = await Promise.all([
+        needsFreqTemp ? geokon('getDataSeries',{serialId:well.loggerId,
+          filters:{loggerChannel:well.loggerCh},
+          metrics:['frequency','temperature'],units:['Hz','°C'],...apiParams}).catch(()=>null) : Promise.resolve(null),
+        needsVoltage  ? geokon('getDataSeries',{serialId:well.loggerId,
+          filters:{diagnostic:true},metrics:['voltage'],units:['V'],...apiParams}).catch(()=>null) : Promise.resolve(null),
+        needsResist   ? geokon('getDataSeries',{serialId:well.loggerId,
+          filters:{loggerChannel:well.loggerCh},
+          metrics:['resistance'],units:['Ω'],...apiParams}).catch(()=>null) : Promise.resolve(null),
+      ]);
+
+      const freqMap={}, tempMap={}, voltMap={}, resistMap={};
+      if(rawRes){ const all=parseObs(rawRes);
+        all.filter(o=>o.metric==='frequency').forEach(o=>freqMap[o.time]=o.value);
+        all.filter(o=>o.metric==='temperature').forEach(o=>tempMap[o.time]=o.value);
+      }
+      if(diagRes) parseObs(diagRes).filter(o=>o.metric==='voltage').forEach(o=>voltMap[o.time]=o.value);
+      if(resistRes) parseObs(resistRes).filter(o=>o.metric==='resistance').forEach(o=>resistMap[o.time]=o.value);
+
+      // Merge all timestamps
+      const allTimes=new Set([...Object.keys(freqMap),...Object.keys(tempMap),...Object.keys(voltMap),...Object.keys(resistMap)]);
+      for(const ts of [...allTimes].sort()){
+        // Convert UTC timestamp to Pacific time, formatted for Excel readability
+        const utcDate = new Date(ts);
+        const pacificStr = utcDate.toLocaleString('en-US', {
+          timeZone: 'America/Los_Angeles',
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hour12: false
+        });
+        // Reformat M/D/YYYY HH:MM:SS → YYYY-MM-DD HH:MM:SS for Excel compatibility
+        const [datePart, timePart] = pacificStr.split(', ');
+        const [mo, dy, yr] = datePart.split('/');
+        const excelTime = `${yr}-${mo}-${dy} ${timePart}`;
+
+        const row={datetime_PST: excelTime, well: well.name};
+        const hz=freqMap[ts], tC=tempMap[ts]??well.T0;
+        if(selectedParams.includes('elevation')&&hz!=null)
+          row['water_surface_elev_'+(elevUnit==='m'?'m_amsl':'ft_amsl')]=elevConvert(polyElev(well,hz,tC),elevUnit).toFixed(3);
+        if(selectedParams.includes('pressure')&&hz!=null){
+          const g=polyGauge(well,hz,tC);
+          const uLabel={ftH2O:'ft_h2o',inH2O:'in_h2o',psi:'psi',kPa:'kPa',m:'m_h2o'}[pressureUnit]||pressureUnit;
+          row['water_level_above_sensor_'+uLabel]=gaugeConvert(g,pressureUnit).toFixed(4);
+        }
+        if(selectedParams.includes('temperature')&&tC!=null){
+          const tVal=tempUnit==='F'?cToF(tC):tC;
+          row[`water_temp_${tempUnit==='F'?'F':'C'}`]=tVal.toFixed(3);
+        }
+        if(selectedParams.includes('frequency')&&hz!=null) row['frequency_Hz']=hz.toFixed(4);
+        if(selectedParams.includes('resistance')&&resistMap[ts]!=null) row['resistance_ohm']=resistMap[ts].toFixed(2);
+        if(selectedParams.includes('voltage')&&voltMap[ts]!=null) row['battery_voltage_V']=voltMap[ts].toFixed(4);
+        rows.push(row);
+      }
+    }
+
+    if(!rows.length){ status.textContent='No data returned for the selected range.'; btn.disabled=false; return; }
+
+    // Build CSV
+    const allKeys=['datetime_PST','well',...new Set(rows.flatMap(r=>Object.keys(r)).filter(k=>k!=='datetime_PST'&&k!=='well'))];
+    const csvLines=[allKeys.join(','),...rows.map(r=>allKeys.map(k=>{const v=r[k]??'';return v.toString().includes(',')?`"${v}"`:v;}).join(','))];
+    const csv=csvLines.join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url;
+    a.download=`mine_pool_export_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    status.textContent=`✓ Exported ${rows.length} rows for ${selectedWells.length} well(s).`;
+  } catch(e){
+    status.textContent='Error: '+e.message;
+  }
+  btn.disabled=false;
+}
+
+// ══════════════════════════════════════════════════════════
+//  ALL-WELLS HOME ELEVATION CHART
+// ══════════════════════════════════════════════════════════
+let homeRange = '30d';
+let homeThreshold = false;
+const homeHidden = new Set(); // well IDs currently toggled off
+
+function toggleHomeThr(){
+  homeThreshold = !homeThreshold;
+  const btn=document.getElementById('home-thr-btn');
+  if(btn){
+    btn.textContent=`⚠ Threshold line: ${homeThreshold?'ON':'OFF'}`;
+    btn.classList.toggle('off',!homeThreshold);
+  }
+  drawHomeElevChart();
+}
+
+async function changeHomeRange(range){
+  homeRange=range;
+  document.querySelectorAll('.rbtn[id^="home-rbtn-"]').forEach(b=>{
+    b.classList.toggle('active', b.id===`home-rbtn-${range}`);
+  });
+  // Reload all wells with new range
+  await Promise.all(WELLS.map(w=>loadWell(w,range)));
+  drawHomeElevChart();
+}
+
+function drawHomeElevChart(){
+  const wrap=document.getElementById('home-elev-chart');
+  if(!wrap) return;
+
+  // Build series for each well
+  const series=WELLS.map(w=>{
+    const s=S[w.id];
+    if(!s.freqObs.length) return {well:w,data:[]};
+    const freqs=[...s.freqObs].reverse();
+    const data=freqs.map(f=>({
+      date:new Date(f.time),
+      val:polyElev(w,f.value,tempValueAtTime(s.tempObs, f.time, w.T0))
+    })).filter(d=>isFinite(d.val));
+    return {well:w,data};
+  }).filter(s=>s.data.length>0);
+
+  if(!series.length){
+    wrap.innerHTML='<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>';
+    return;
+  }
+  wrap.innerHTML='';
+
+  const margin={top:12,right:18,bottom:38,left:68};
+  const totalH=280;
+  const H=totalH-margin.top-margin.bottom;
+  const getW=()=>wrap.getBoundingClientRect().width||900;
+  let width=getW()-margin.left-margin.right;
+
+  const svg=d3.select(wrap).append('svg')
+    .attr('height',totalH).attr('width',getW()).style('display','block');
+  const defs=svg.append('defs');
+  const clipId='cl-home-elev';
+  defs.append('clipPath').attr('id',clipId)
+    .append('rect').attr('width',width).attr('height',H+12).attr('y',-6);
+
+  const g=svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+
+  // Y axis label
+  svg.append('text')
+    .attr('transform',`translate(13,${margin.top+H/2}) rotate(-90)`)
+    .attr('text-anchor','middle').attr('fill','var(--muted)')
+    .attr('font-family','var(--mono)').attr('font-size',10)
+    .text('ft AMSL');
+
+  // Compute x/y extents across all visible series
+  const allDates=[]; const allVals=[];
+  series.filter(s=>!homeHidden.has(s.well.id)).forEach(s=>{
+    s.data.forEach(d=>{ allDates.push(d.date); allVals.push(d.val); });
+  });
+  if(homeThreshold) allVals.push(ALERT_ELEV);
+
+  if(!allDates.length){
+    wrap.innerHTML='<div class="offline-chart"><span style="color:var(--muted)">No visible series</span></div>';
+    return;
+  }
+
+  const xExt=d3.extent(allDates);
+  let xFull=d3.scaleTime().domain(xExt).range([0,width]);
+  let xCur=xFull.copy();
+
+  // Compute Y domain from visible series within an x window
+  function computeHomeY(x0, x1){
+    const vals=[];
+    series.filter(s=>!homeHidden.has(s.well.id)).forEach(s=>{
+      s.data.filter(d=>d.date>=x0&&d.date<=x1).forEach(d=>vals.push(d.val));
+    });
+    if(homeThreshold) vals.push(ALERT_ELEV);
+    if(!vals.length) return [3000,3400];
+    const mn=d3.min(vals), mx=d3.max(vals);
+    const pad=(mx-mn)*0.06||0.5;
+    return [mn-pad, mx+pad];
+  }
+
+  const yScale=d3.scaleLinear().domain(computeHomeY(xExt[0],xExt[1])).range([H,0]).nice();
+
+  const xAxis=g.append('g').attr('class','axis').attr('transform',`translate(0,${H})`);
+  const yAxis=g.append('g').attr('class','axis');
+  const yGrid=g.append('g').call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+  yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+  yGrid.select('.domain').remove();
+
+  const clipG=g.append('g').attr('clip-path',`url(#${clipId})`);
+
+  // Draw each well's line
+  const linePaths={}, areaPaths={};
+  series.forEach(s=>{
+    const well=s.well;
+    const hidden=homeHidden.has(well.id);
+    const gradId=`hg-${well.id}`;
+    const grad=defs.append('linearGradient').attr('id',gradId)
+      .attr('x1','0').attr('x2','0').attr('y1','0').attr('y2','1');
+    grad.append('stop').attr('offset','0%').attr('stop-color',well.color).attr('stop-opacity',0.12);
+    grad.append('stop').attr('offset','100%').attr('stop-color',well.color).attr('stop-opacity',0);
+
+    const areaGen=d3.area().x(d=>xCur(d.date)).y0(H).y1(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+    const lineGen=d3.line().x(d=>xCur(d.date)).y(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+    const ap=clipG.append('path').datum(s.data).attr('fill',`url(#${gradId})`).attr('d',areaGen).style('opacity',hidden?0:1);
+    const lp=clipG.append('path').datum(s.data).attr('fill','none').attr('stroke',well.color)
+      .attr('stroke-width',1.6).attr('d',lineGen).style('opacity',hidden?0:1);
+    areaPaths[well.id]=ap; linePaths[well.id]=lp;
+  });
+
+  // Threshold line
+  let thrEl=null;
+  if(homeThreshold){
+    thrEl=clipG.append('line').attr('class','threshold-line')
+      .attr('x1',0).attr('x2',width)
+      .attr('y1',yScale(ALERT_ELEV)).attr('y2',yScale(ALERT_ELEV));
+    clipG.append('text').attr('x',4).attr('y',yScale(ALERT_ELEV)-5)
+      .attr('fill','rgba(224,90,79,0.75)').attr('font-family','var(--mono)').attr('font-size',9)
+      .text('3,370 ft — Silver Butte Adit');
+  }
+
+  const xhair=clipG.append('line').attr('class','crosshair').attr('y1',0).attr('y2',H);
+
+  function redrawAxes(){
+    const spanDays=(xCur.domain()[1]-xCur.domain()[0])/86400e3;
+    const tickFmt=spanDays>180?d3.timeFormat('%b %Y'):d3.timeFormat('%b %d');
+    xAxis.call(d3.axisBottom(xCur).ticks(7).tickFormat(tickFmt))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    xAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    xAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.call(d3.axisLeft(yScale).ticks(6).tickFormat(v=>v.toFixed(0)))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    yAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yGrid.call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+    yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+    yGrid.select('.domain').remove();
+  }
+  redrawAxes();
+
+  function rescaleAndRedraw(){
+    const [d0,d1]=xCur.domain();
+    yScale.domain(computeHomeY(d0,d1)).nice();
+    series.forEach(s=>{
+      const areaGen=d3.area().x(d=>xCur(d.date)).y0(H).y1(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+      const lineGen=d3.line().x(d=>xCur(d.date)).y(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+      areaPaths[s.well.id].attr('d',areaGen);
+      linePaths[s.well.id].attr('d',lineGen);
+    });
+    if(thrEl) thrEl.attr('x1',0).attr('x2',width)
+      .attr('y1',yScale(ALERT_ELEV)).attr('y2',yScale(ALERT_ELEV));
+    redrawAxes();
+  }
+
+  // Brush zoom
+  let isZoomed=false;
+  const zrBtn=document.getElementById('zr-home-elev');
+  const brushG=clipG.append('g');
+  const brush=d3.brushX().extent([[0,0],[width,H]]).on('end',ev=>{
+    if(!ev.selection) return;
+    const [p0,p1]=ev.selection;
+    if(Math.abs(p1-p0)<5) return;
+    xCur=xFull.copy().domain([xCur.invert(p0),xCur.invert(p1)]);
+    isZoomed=true; if(zrBtn) zrBtn.classList.add('visible');
+    brushG.call(brush.move,null); rescaleAndRedraw();
+  });
+  brushG.call(brush);
+  brushG.select('.overlay').style('cursor','crosshair');
+
+  // Tooltip
+  const tip=document.getElementById('globalTip');
+  const TIP_W=200;
+  brushG.select('.overlay')
+    .on('mousemove.tip',function(ev){
+      const [mx]=d3.pointer(ev,g.node());
+      if(mx<0||mx>width){tip.style.opacity='0';return;}
+      xhair.attr('x1',mx).attr('x2',mx).style('opacity',1);
+      const hDate=xCur.invert(mx);
+      const tipRows=series.filter(s=>!homeHidden.has(s.well.id)).map(s=>{
+        if(!s.data.length) return '';
+        const closest=s.data.reduce((a,b)=>Math.abs(a.date-hDate)<Math.abs(b.date-hDate)?a:b);
+        return `<div class="tip-row"><span style="color:${s.well.color}">${s.well.shortName}</span><span>${fmtNum(closest.val,2)}</span></div>`;
+      }).join('');
+      document.getElementById('tipDate').textContent=d3.timeFormat('%b %d, %Y %H:%M')(hDate);
+      document.getElementById('tipRows').innerHTML=tipRows;
+      tip.style.opacity='1';
+      const cx=ev.clientX, ww=window.innerWidth;
+      tip.style.left=(cx+TIP_W+24>ww?cx-TIP_W-12:cx+18)+'px';
+      tip.style.top=(ev.clientY-40)+'px';
+    })
+    .on('mouseleave.tip',()=>{tip.style.opacity='0';xhair.style('opacity',0);});
+
+  svg.on('dblclick',()=>{ if(!isZoomed) return; xCur=xFull.copy(); isZoomed=false; if(zrBtn) zrBtn.classList.remove('visible'); rescaleAndRedraw(); });
+  if(zrBtn) zrBtn.onclick=()=>{ xCur=xFull.copy(); isZoomed=false; zrBtn.classList.remove('visible'); rescaleAndRedraw(); };
+
+  bindChartResize('home-elev-chart', ()=>{
+    const nw=getW()-margin.left-margin.right;
+    if(Math.abs(nw-width)<2) return;
+    width=nw; svg.attr('width',getW());
+    xFull.range([0,width]); if(!isZoomed) xCur=xFull.copy();
+    brush.extent([[0,0],[width,H]]); brushG.call(brush);
+    if(thrEl) thrEl.attr('x2',width); rescaleAndRedraw();
+  });
+
+  // Remove any existing legend before rebuilding
+  const existingLegend = wrap.parentElement.querySelector('.home-chart-legend');
+  if(existingLegend) existingLegend.remove();
+
+  // Build legend below chart — clicking rescales Y
+  const legendWrap=document.createElement('div');
+  legendWrap.className='home-chart-legend';
+  series.forEach(s=>{
+    const btn=document.createElement('button');
+    btn.className='hcl-btn'+(homeHidden.has(s.well.id)?' hidden':'');
+    btn.style.cssText=`background:${s.well.color}22;border-color:${s.well.color}66;color:${s.well.color}`;
+    btn.textContent=s.well.shortName;
+    btn.onclick=()=>{
+      if(homeHidden.has(s.well.id)) homeHidden.delete(s.well.id);
+      else homeHidden.add(s.well.id);
+      btn.classList.toggle('hidden', homeHidden.has(s.well.id));
+      const vis=!homeHidden.has(s.well.id);
+      linePaths[s.well.id].style('opacity',vis?1:0);
+      areaPaths[s.well.id].style('opacity',vis?1:0);
+      // Rescale Y to fit remaining visible data
+      rescaleAndRedraw();
+    };
+    legendWrap.appendChild(btn);
+  });
+  wrap.parentElement.appendChild(legendWrap);
+}
+
+function switchTab(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+  activeTab=id;
+  const w=WELLS.find(x=>x.id===id);
+  if(w) renderWellPage(w);
+  else if(id==='home'&&homeMap){
+    setTimeout(()=>homeMap.invalidateSize(),60);
+    drawHomeElevChart();
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  FORMAT HELPERS
+// ══════════════════════════════════════════════════════════
+const fmtShort=iso=>iso?new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+const fmtD=iso=>iso?new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}):'—';
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+function updateFullscreenButton(){
+  const btn=document.getElementById('fullscreenBtn');
+  if(!btn) return;
+  btn.textContent=document.fullscreenElement ? 'Exit Full Screen' : 'Full Screen';
+}
+async function toggleFullscreen(){
+  try{
+    if(document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  }catch(e){
+    console.error('Fullscreen unavailable:', e);
+  }finally{
+    updateFullscreenButton();
+  }
+}
+
+window.addEventListener('load',()=>{
+  initMap();
+  initExportUI();
+  updateFullscreenButton();
+  updateTokenButton();
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  document.getElementById('tokenInput')?.addEventListener('keydown', ev=>{
+    if(ev.key==='Enter') saveApiToken();
+  });
+  if(getStoredApiToken()) loadAll();
+  else{
+    document.getElementById('liveLabel').textContent='Enter API token to load data';
+    document.getElementById('liveDot').className='live-dot error';
+    openTokenGate();
+  }
+});
+</script>
+
+<!-- Chart.js for Cow Creek gauge -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script>
+(function(){
+  const SG_SITE_ID   = 'USGS-14310000';
+  const SG_SITE_NAME = 'Cow Creek Near Riddle, OR';
+  const SG_BASE_URL  = 'https://api.waterdata.usgs.gov/ogcapi/v0/collections/continuous/items';
+  const SG_PERIODS   = {
+    '7D':  {days:7,   label:'7 Days',  unit:'day',   tickLimit:8},
+    '30D': {days:30,  label:'30 Days', unit:'day',   tickLimit:10},
+    '1Y':  {days:365, label:'1 Year',  unit:'month', tickLimit:12},
+  };
+  let sgPeriod='30D', sgChart=null, sgAllData={}, sgLatest=null;
+
+  function sgFmt(d){ return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}); }
+  function sgCfs(v,d=1){ return parseFloat(v).toLocaleString(undefined,{maximumFractionDigits:d}); }
+  function sgDownsample(data,max=500){
+    if(data.length<=max) return data;
+    const step=Math.ceil(data.length/max);
+    const out=data.filter((_,i)=>i%step===0);
+    if(out[out.length-1]!==data[data.length-1]) out.push(data[data.length-1]);
+    return out;
+  }
+  function sgStats(data,pk){
+    const vals=data.map(d=>d.value);
+    return {min:Math.min(...vals),max:Math.max(...vals),avg:vals.reduce((a,b)=>a+b,0)/vals.length,label:SG_PERIODS[pk].label,count:data.length};
+  }
+  async function sgFetchChunk(range){
+    const url=SG_BASE_URL+'?monitoring_location_id='+SG_SITE_ID+'&parameter_code=00060&datetime='+range+'&f=json&limit=10000';
+    const res=await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return (await res.json()).features||[];
+  }
+  async function sgFetchPeriod(pk){
+    if(sgAllData[pk]) return sgAllData[pk];
+    const days=SG_PERIODS[pk].days, chunkDays=89, now=new Date();
+    const f=d=>d.toISOString().slice(0,19)+'Z';
+    const chunks=[]; let end=new Date(now);
+    while(end>new Date(now-days*86400000)){
+      const start=new Date(Math.max(end-chunkDays*86400000,now-days*86400000));
+      chunks.push(f(start)+'/'+f(end)); end=new Date(start-1);
+    }
+    const results=await Promise.all(chunks.map(r=>sgFetchChunk(r)));
+    const parsed=results.flat()
+      .map(f=>({time:new Date(f.properties.time),value:parseFloat(f.properties.value)}))
+      .filter(d=>!isNaN(d.value)&&!isNaN(d.time))
+      .filter((d,i,a)=>i===0||d.time.getTime()!==a[i-1].time.getTime())
+      .sort((a,b)=>a.time-b.time);
+    if(!parsed.length) throw new Error('No data returned');
+    sgAllData[pk]=parsed; return parsed;
+  }
+  function sgRenderShell(latest,stats,pk){
+    const trend=latest.value>(sgAllData[pk].at(-2)?.value??latest.value)?'↑':'↓';
+    document.getElementById('sg-inner').innerHTML=`
+      <div class="sg-header">
+        <div>
+          <div class="sg-site-label">USGS Stream Gauge</div>
+          <div class="sg-site-name">Cow Creek Stream Gauge</div>
+          <div class="sg-site-id">Site No. 14310000 &nbsp;·&nbsp; Riddle, OR</div>
+        </div>
+        <div class="sg-reading">
+          <div class="sg-reading-value" id="sg-val">${sgCfs(latest.value)} <span style="font-size:1rem;opacity:0.7">${trend}</span></div>
+          <div class="sg-reading-unit">cfs &nbsp;·&nbsp; Discharge</div>
+          <div class="sg-reading-time" id="sg-time">${sgFmt(latest.time)}</div>
+        </div>
+      </div>
+      <div class="sg-stats">
+        <div class="sg-stat"><div class="sg-stat-label" id="sg-lbl-high">${stats.label} High</div><div class="sg-stat-value sg-high" id="sg-high">${sgCfs(stats.max,0)} cfs</div></div>
+        <div class="sg-stat"><div class="sg-stat-label" id="sg-lbl-low">${stats.label} Low</div><div class="sg-stat-value sg-low" id="sg-low">${sgCfs(stats.min,0)} cfs</div></div>
+        <div class="sg-stat"><div class="sg-stat-label" id="sg-lbl-avg">${stats.label} Avg</div><div class="sg-stat-value" id="sg-avg">${sgCfs(stats.avg)} cfs</div></div>
+        <div class="sg-stat"><div class="sg-stat-label">Readings</div><div class="sg-stat-value" id="sg-cnt">${stats.count.toLocaleString()}</div></div>
+      </div>
+      <div class="sg-chart-wrap" id="sg-chart-wrap">
+        <div class="sg-chart-header">
+          <div class="sg-chart-title" id="sg-chart-title">Discharge — Past ${stats.label} (cfs)</div>
+          <div class="sg-period-toggle">
+            <button class="sg-period-btn ${pk==='7D'?'active':''}"  data-p="7D">7D</button>
+            <button class="sg-period-btn ${pk==='30D'?'active':''}" data-p="30D">30D</button>
+            <button class="sg-period-btn ${pk==='1Y'?'active':''}"  data-p="1Y">1Y</button>
+          </div>
+        </div>
+        <div style="position:relative;height:160px"><canvas id="sgChart"></canvas></div>
+        <div class="sg-zoom-hint">Click &amp; drag to zoom &nbsp;·&nbsp; Double-click to reset</div>
+      </div>
+      <div class="sg-footer">
+        <div class="sg-footer-src"><span class="sg-status-dot"></span>Live data via <a href="https://api.waterdata.usgs.gov/" target="_blank">USGS Water Data API</a> &nbsp;·&nbsp; <a href="https://waterdata.usgs.gov/monitoring-location/USGS-14310000/" target="_blank">View on USGS ↗</a> &nbsp;·&nbsp; <a href="https://www.google.com/maps/place/42%C2%B055'24.4%22N+123%C2%B025'44.3%22W/@42.9188111,-123.4614899,13790m/data=!3m1!1e3!4m4!3m3!8m2!3d42.9234502!4d-123.4289571!5m1!1e2" target="_blank">Gauge Location ↗</a></div>
+        <div class="sg-footer-src">Updated ${sgFmt(latest.time)}</div>
+      </div>`;
+    document.querySelectorAll('.sg-period-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>sgSwitch(btn.dataset.p));
+    });
+  }
+  function sgBuildChart(data,pk){
+    const display=sgDownsample(data);
+    const cfg=SG_PERIODS[pk];
+    const ctx=document.getElementById('sgChart').getContext('2d');
+    const grad=ctx.createLinearGradient(0,0,0,160);
+    grad.addColorStop(0,'rgba(59,158,221,0.35)');
+    grad.addColorStop(0.6,'rgba(59,158,221,0.07)');
+    grad.addColorStop(1,'rgba(59,158,221,0)');
+    if(sgChart){
+      sgChart.data.labels=display.map(d=>d.time);
+      sgChart.data.datasets[0].data=display.map(d=>d.value);
+      sgChart.data.datasets[0].backgroundColor=grad;
+      sgChart.options.scales.x.time.unit=cfg.unit;
+      sgChart.options.scales.x.ticks.maxTicksLimit=cfg.tickLimit;
+      sgChart.resetZoom(); sgChart.update(); return;
+    }
+    sgChart=new Chart(ctx,{
+      type:'line',
+      data:{labels:display.map(d=>d.time),datasets:[{
+        data:display.map(d=>d.value),borderColor:'#3b9edd',borderWidth:2,
+        pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:'#5bb8f5',
+        pointHoverBorderColor:'#fff',pointHoverBorderWidth:2,
+        fill:true,backgroundColor:grad,tension:0.3
+      }]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{display:false},
+          tooltip:{
+            backgroundColor:'#111821',borderColor:'rgba(59,158,221,0.4)',borderWidth:1,
+            titleColor:'#6a8099',bodyColor:'#e4edf5',
+            titleFont:{family:"'DM Mono',monospace",size:11},
+            bodyFont:{family:"'DM Mono',monospace",size:13},
+            padding:12,
+            callbacks:{
+              title:items=>sgFmt(sgChart.data.labels[items[0].dataIndex]),
+              label:item=>` ${sgCfs(item.parsed.y)} cfs`
+            }
+          },
+          zoom:{zoom:{drag:{enabled:true,backgroundColor:'rgba(59,158,221,0.12)',borderColor:'rgba(59,158,221,0.5)',borderWidth:1},mode:'x'}}
+        },
+        scales:{
+          x:{type:'time',time:{unit:cfg.unit,displayFormats:{day:'MMM d',month:'MMM yyyy'}},
+            grid:{color:'rgba(255,255,255,0.04)'},
+            ticks:{color:'#6a8099',font:{family:"'DM Mono',monospace",size:10},maxTicksLimit:cfg.tickLimit},
+            border:{color:'rgba(255,255,255,0.07)'}},
+          y:{grid:{color:'rgba(255,255,255,0.04)'},
+            ticks:{color:'#6a8099',font:{family:"'DM Mono',monospace",size:10},callback:v=>sgCfs(v,0)+' cfs'},
+            border:{color:'rgba(255,255,255,0.07)'}}
+        }
+      }
+    });
+    document.getElementById('sgChart').addEventListener('dblclick',()=>sgChart.resetZoom());
+  }
+  async function sgSwitch(pk){
+    if(pk===sgPeriod&&sgAllData[pk]){sgChart&&sgChart.resetZoom();return;}
+    sgPeriod=pk;
+    document.querySelectorAll('.sg-period-btn').forEach(b=>b.classList.toggle('active',b.dataset.p===pk));
+    const wrap=document.getElementById('sg-chart-wrap');
+    const ov=document.createElement('div'); ov.className='sg-chart-loading'; ov.textContent='LOADING…';
+    wrap.appendChild(ov);
+    try{
+      const data=await sgFetchPeriod(pk);
+      const stats=sgStats(data,pk);
+      document.getElementById('sg-lbl-high').textContent=stats.label+' High';
+      document.getElementById('sg-lbl-low').textContent=stats.label+' Low';
+      document.getElementById('sg-lbl-avg').textContent=stats.label+' Avg';
+      document.getElementById('sg-high').textContent=sgCfs(stats.max,0)+' cfs';
+      document.getElementById('sg-low').textContent=sgCfs(stats.min,0)+' cfs';
+      document.getElementById('sg-avg').textContent=sgCfs(stats.avg)+' cfs';
+      document.getElementById('sg-cnt').textContent=stats.count.toLocaleString();
+      document.getElementById('sg-chart-title').textContent='Discharge — Past '+stats.label+' (cfs)';
+      sgBuildChart(data,pk);
+    } catch(e){ ov.textContent='⚠ '+e.message; ov.style.color='#e05a3a'; return; }
+    wrap.removeChild(ov);
+  }
+  (async function sgInit(){
+    try{
+      const data=await sgFetchPeriod(sgPeriod);
+      const stats=sgStats(data,sgPeriod);
+      sgLatest=data[data.length-1];
+      sgRenderShell(sgLatest,stats,sgPeriod);
+      sgBuildChart(data,sgPeriod);
+    } catch(e){
+      document.getElementById('sg-inner').innerHTML=
+        `<div class="sg-error">⚠ Could not load stream data<br><span style="color:var(--muted);font-size:10px;margin-top:6px;display:block">${e.message}</span></div>`;
+    }
+  })();
+})();
+</script>
