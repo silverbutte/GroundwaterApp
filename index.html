@@ -137,6 +137,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .wov-trend{font-size:20px;line-height:1;opacity:0.9}
 .wov-trend.rising{color:var(--success)}
 .wov-trend.falling{color:var(--accent)}
+.wov-gateway{align-items:flex-start}
+.wov-gateway-data{display:grid;grid-template-columns:1fr;gap:4px;min-width:190px;text-align:right;font-family:var(--mono)}
+.wov-gateway-row{display:flex;justify-content:space-between;gap:14px;font-size:10px;color:var(--muted)}
+.wov-gateway-row span:last-child{color:var(--text);font-weight:500}
 
 /* ── MAP MARKER DOTS ── */
 .map-dot-wrap{position:relative;width:14px;height:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
@@ -373,14 +377,15 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 <div id="alertBanner">⚠&nbsp;&nbsp;Mine pool elevation at or above Silver Butte Adit threshold — 3,370 ft AMSL</div>
 
 <!-- TABS -->
-<div class="tab-bar">
+<div class="tab-bar" id="mainTabBar">
   <button class="tab-btn active" onclick="switchTab('home')"    id="tab-home">Overview</button>
-  <button class="tab-btn" onclick="switchTab('formosa')"        id="tab-formosa"><span class="ts offline" id="ts-formosa"></span>Formosa 1 Adit</button>
   <button class="tab-btn" onclick="switchTab('mw8r')"           id="tab-mw8r">   <span class="ts offline" id="ts-mw8r"></span>MW-8R</button>
   <button class="tab-btn" onclick="switchTab('mw5')"            id="tab-mw5">    <span class="ts offline" id="ts-mw5"></span>MW-5</button>
   <button class="tab-btn" onclick="switchTab('mw2')"            id="tab-mw2">    <span class="ts offline" id="ts-mw2"></span>MW-2</button>
   <button class="tab-btn" onclick="switchTab('mw4r')"           id="tab-mw4r">   <span class="ts offline" id="ts-mw4r"></span>MW-4R</button>
-  <button class="tab-btn" onclick="switchTab('export')"         id="tab-export">Export Data</button>
+  <button class="tab-btn" onclick="switchTab('lora-gateway')"    id="tab-lora-gateway"><span class="ts offline" id="ts-lora-gateway"></span>📡 Gateway</button>
+  <button class="tab-btn" onclick="switchTab('archived')"        id="tab-archived">📦 Archived</button>
+  <button class="tab-btn" onclick="switchTab('export')"          id="tab-export">Export Data</button>
 </div>
 
 <!-- ══ HOME ══ -->
@@ -431,9 +436,24 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 <!-- ══ WELL PAGES ══ -->
 <div class="page" id="page-formosa"></div>
 <div class="page" id="page-mw8r"></div>
+<div class="page" id="page-mw8r-lora"></div>
 <div class="page" id="page-mw5"></div>
 <div class="page" id="page-mw2"></div>
 <div class="page" id="page-mw4r"></div>
+<div class="page" id="page-lora-gateway"></div>
+
+<!-- ══ ARCHIVED PAGE ══ -->
+<div class="page" id="page-archived">
+  <div class="container">
+    <div class="well-header">
+      <h1 style="font-size:28px;font-weight:600;letter-spacing:-0.02em">Archived Loggers</h1>
+      <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px">Decommissioned monitoring locations with historical data. Tap a card to view detail charts.</p>
+    </div>
+    <div class="well-cards" id="archivedCards" style="margin-top:20px;">
+      <!-- Archived cards will be rendered here -->
+    </div>
+  </div>
+</div>
 
 <!-- ══ EXPORT PAGE ══ -->
 <div class="page" id="page-export">
@@ -567,11 +587,15 @@ const WELLS = [
   { id:'formosa', name:'Formosa 1 Adit', shortName:'Formosa 1',
     loggerId:'2201322', sensorId:'1836213',
     A:-0.0000005471, B:-0.16588, K:-0.07202, R0:8891.5, T0:8.9, sensorElev:3309.34,
-    lat:42.8554489, lng:-123.3825706, minePool:true, color:'#4fa3e0', loggerCh:1 },
-  { id:'mw8r', name:'MW-8R', shortName:'MW-8R',
+    lat:42.8554489, lng:-123.3825706, minePool:true, color:'#4fa3e0', loggerCh:1, archived:true },
+  { id:'mw8r', name:'MW-8R', shortName:'MW-8R', sourceLabel:'MW-8R Cellular',
     loggerId:'2438725', sensorId:'2239175',
     A:-0.0000001889, B:-0.10779, K:0.080287, R0:9338.6, T0:5.1, sensorElev:3270.69,
     lat:42.854423, lng:-123.3818725, minePool:true, color:'#4fada3', loggerCh:1 },
+  { id:'mw8r-lora', name:'MW-8R LoRa', shortName:'MW-8R LoRa', sourceLabel:'MW-8R LoRa', compareWith:'mw8r',
+    loggerId:'2621052', sensorId:'2239175',
+    A:-0.0000001889, B:-0.10779, K:0.080287, R0:9338.6, T0:5.1, sensorElev:3270.69,
+    lat:42.854423, lng:-123.3818725, minePool:true, color:'#2dd4bf', loggerCh:1 },
   { id:'mw5', name:'MW-5', shortName:'MW-5',
     loggerId:'2201323', sensorId:'2239178',
     A:-0.0000003712, B:-0.10492, K:0.10504, R0:8700.8, T0:8.9, sensorElev:3249.01,
@@ -584,9 +608,17 @@ const WELLS = [
     loggerId:'2565304', sensorId:'2239176',
     A:-0.000000281, B:-0.1049, K:0.26143, R0:9316.7, T0:13.4, sensorElev:3011.46,
     lat:42.8554779, lng:-123.3834248, minePool:false, color:'#e05a4f', loggerCh:1 },
+  { id:'lora-gateway', name:'LoRa Cellular Gateway', shortName:'Gateway',
+    loggerId:'2621054', sensorId:'N/A', model:'8910-GTW-LTM', networkType:'Gateway', imei:'359671680007155',
+    A:0, B:0, K:0, R0:0, T0:0, sensorElev:0,
+    lat:42.8544, lng:-123.3820, minePool:false, color:'#3b9edd', loggerCh:1, isGateway:true },
 ];
 // Compute C per well
 WELLS.forEach(w => { w.C = -(w.A*w.R0*w.R0 + w.B*w.R0); });
+
+const DISPLAY_WELLS = WELLS.filter(w => !w.compareWith && !w.isGateway);
+const ACTIVE_WELLS = WELLS.filter(w => !w.compareWith && !w.archived && !w.isGateway);
+const ARCHIVED_WELLS = WELLS.filter(w => !w.compareWith && w.archived && !w.isGateway);
 
 // ══════════════════════════════════════════════════════════
 //  STATE
@@ -627,6 +659,46 @@ function gaugeConvert(ftH2O, unit){
   return ftH2O;
 }
 function elevConvert(ft, unit){ return unit==='m' ? ftToM(ft) : ft; }
+
+function displayNameFor(well){
+  return well.sourceLabel || well.name;
+}
+
+function getPrimaryWell(well){
+  return well?.compareWith ? (WELLS.find(w=>w.id===well.compareWith) || well) : well;
+}
+
+function getLoggerGroup(well){
+  const primary=getPrimaryWell(well);
+  return [primary, ...WELLS.filter(w=>w.compareWith===primary.id)];
+}
+
+function getLatestGroupReading(well){
+  return getLoggerGroup(well)
+    .map(w=>({well:w, state:S[w.id]}))
+    .filter(x=>x.state?.lastTime && x.state.elev!=null)
+    .sort((a,b)=>new Date(b.state.lastTime)-new Date(a.state.lastTime))[0] || null;
+}
+
+function getGroupStatus(well){
+  const states=getLoggerGroup(well).map(w=>S[w.id]?.status);
+  if(states.includes('online')) return 'online';
+  if(states.includes('loading')) return 'loading';
+  if(states.includes('error')) return 'error';
+  return 'offline';
+}
+
+function groupHasObs(well, key){
+  return getLoggerGroup(well).some(w=>(S[w.id]?.[key]||[]).length);
+}
+
+function elevationSeriesFor(well){
+  const s=S[well.id];
+  return [...s.freqObs].reverse().map(f=>{
+    const t=tempValueAtTime(s.tempObs, f.time, well.T0);
+    return {date:new Date(f.time), val:polyElev(well,f.value,t)};
+  }).filter(d=>isFinite(d.val));
+}
 function formatDateInputLocal(date){
   const y=date.getFullYear();
   const m=String(date.getMonth()+1).padStart(2,'0');
@@ -843,6 +915,71 @@ function dateRangeParams(range){
   return params;
 }
 
+function parseReadIntervalMins(rawVal){
+  if(rawVal == null) return null;
+  const num = Number(rawVal);
+  if(isNaN(num) || num <= 0) return null;
+  if(num > 500) return Math.round(num / 60);
+  return num;
+}
+
+function findTimestampByKey(root, includeParts, excludeParts=[]){
+  const seen = new Set();
+  const stack = [{ key:'', value:root }];
+  let bestTime = null;
+  while(stack.length){
+    const { key, value } = stack.pop();
+    if(value == null) continue;
+    const keyText = String(key).toLowerCase();
+    if(typeof value === 'string' || typeof value === 'number'){
+      const matchesInclude = includeParts.some(part=>keyText.includes(part));
+      const matchesExclude = excludeParts.some(part=>keyText.includes(part));
+      const dt = new Date(value);
+      if(matchesInclude && !matchesExclude && !isNaN(dt.getTime())){
+        if(!bestTime || dt.getTime() > bestTime.getTime()) bestTime = dt;
+      }
+      continue;
+    }
+    if(typeof value !== 'object' || seen.has(value)) continue;
+    seen.add(value);
+    for(const [childKey, childValue] of Object.entries(value)){
+      stack.push({ key: childKey, value: childValue });
+    }
+  }
+  return bestTime ? bestTime.toISOString() : null;
+}
+
+function formatRelativeTime(isoString){
+  if(!isoString) return { primary: '—', dateStr: 'No connection record' };
+  const dt = new Date(isoString);
+  if(isNaN(dt.getTime())) return { primary: '—', dateStr: 'Invalid date' };
+  
+  const now = new Date();
+  const diffMs = Math.max(0, now.getTime() - dt.getTime());
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  
+  const hrs = String(dt.getHours()).padStart(2, '0');
+  const mins = String(dt.getMinutes()).padStart(2, '0');
+  const dateStr = `${hrs}:${mins} ${dt.getMonth()+1}/${dt.getDate()}/${dt.getFullYear()}`;
+  
+  if(diffMins < 1){
+    return { primary: `Just now (${dateStr})`, dateStr };
+  } else if(diffMins < 120){
+    const unit = diffMins === 1 ? 'minute' : 'minutes';
+    return { primary: `${diffMins} ${unit} ago (${dateStr})`, dateStr };
+  } else if(diffHours <= 99){
+    const unit = diffHours === 1 ? 'hour' : 'hours';
+    return { primary: `${diffHours} ${unit} ago (${dateStr})`, dateStr };
+  } else {
+    const fullDate = dt.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+    return { primary: fullDate, dateStr };
+  }
+}
+
 // ══════════════════════════════════════════════════════════
 //  LOAD WELL
 // ══════════════════════════════════════════════════════════
@@ -851,6 +988,56 @@ async function loadWell(well, range){
   s.status = 'loading';
   try {
     const rp = dateRangeParams(range || s.range);
+
+    if(well.isGateway){
+      const [logRes, diagRes, tempRes, sigRes] = await Promise.all([
+        geokon('getLogger', { serialId: well.loggerId }).catch(() => null),
+        geokon('getDataSeries', { serialId: well.loggerId, filters: { diagnostic: true },
+          metrics: ['voltage'], units: ['V'], format: 2, ...rp }).catch(() => null),
+        geokon('getDataSeries', { serialId: well.loggerId, filters: { diagnostic: true },
+          metrics: ['temperature'], units: ['°C'], format: 2, ...rp }).catch(() => null),
+        geokon('getDataSeries', { serialId: well.loggerId, filters: { diagnostic: true },
+          metrics: ['signalStrength'], units: ['dBm'], format: 2, ...rp }).catch(() => null),
+      ]);
+      s.loggerInfo = logRes;
+      console.log('[Gateway Debug] getLogger response:', JSON.stringify(logRes, null, 2));
+      console.log('[Gateway Debug] signalStrength response:', JSON.stringify(sigRes, null, 2));
+      
+      const volts   = diagRes ? parseObs(diagRes).filter(o => o.metric === 'voltage') : [];
+      const temps   = tempRes ? parseObs(tempRes).filter(o => o.metric === 'temperature') : [];
+      const signals = sigRes  ? parseObs(sigRes).filter(o => o.metric === 'signalStrength') : [];
+      
+      s.freqObs = []; s.resistObs = [];
+      s.tempObs = temps; s.voltObs = volts; s.sigObs = signals;
+      s.volt = volts[0]?.value ?? null;
+      
+      const props = logRes?.properties || {};
+      const config = logRes?.configuration || {};
+      
+      const rawConnect =
+        findTimestampByKey(logRes, ['connect','contact','sync','checkin','check','call','comm','communication','activity'], ['observation','observed','data','reading']);
+
+      const rawData =
+        findTimestampByKey(logRes, ['observation','observed','data','reading'], ['connect','contact','sync','checkin','call','communication','activity']);
+      
+      const remoteTimes = WELLS.filter(w => w.compareWith || w.loggerId === '2621052')
+        .map(w => S[w.id]?.lastTime)
+        .filter(Boolean)
+        .sort((a,b) => new Date(b) - new Date(a));
+      const latestRemoteTime = remoteTimes[0] || null;
+
+      s.lastConnect = rawConnect || (signals.length ? signals[0].time : null) || (volts.length ? volts[0].time : null);
+      s.lastData = rawData || latestRemoteTime || (temps.length ? temps[0].time : null);
+      
+      const intervalVal = parseReadIntervalMins(config.logging?.readInterval);
+      s.readInterval = intervalVal ? `${intervalVal} mins` : (config.logging?.readIntervalDescription || '30 mins');
+      s.powerMode = config.logging?.powerModeDescription || config.logging?.powerMode || 'Low Power';
+      
+      s.lastTime = s.lastConnect || s.lastData;
+      s.status = (s.lastTime && (Date.now() - new Date(s.lastTime).getTime()) <= OFFLINE_MS) ? 'online' : 'offline';
+      return;
+    }
+
     const [logRes, rawRes, diagRes, resistRes] = await Promise.all([
       geokon('getLogger',{serialId:well.loggerId}).catch(()=>null),
       geokon('getDataSeries',{serialId:well.loggerId, filters:{loggerChannel:well.loggerCh},
@@ -944,11 +1131,12 @@ function updateAlertBanner(){
 //  TAB DOTS
 // ══════════════════════════════════════════════════════════
 function updateAllTabDots(){
-  WELLS.forEach(w=>{
+  WELLS.filter(w => !w.compareWith && !w.archived).forEach(w=>{
     const el=document.getElementById('ts-'+w.id); if(!el) return;
-    const s=S[w.id];
-    const isAlert=w.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
-    el.className='ts '+(isAlert?'alerting':s.status==='online'?'online':'offline');
+    const status = w.isGateway ? S[w.id]?.status : getGroupStatus(w);
+    const latest = w.isGateway ? null : getLatestGroupReading(w);
+    const isAlert = w.minePool && latest?.state.elev!=null && latest.state.elev>=ALERT_ELEV;
+    el.className='ts '+(isAlert?'alerting':status==='online'?'online':'offline');
   });
 }
 
@@ -961,27 +1149,30 @@ function fmtNum(v, dec=2){
   return Number(v).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
 }
 function getWellTrend(well){
-  const s=S[well.id];
-  if(s.status!=='online' || s.freqObs.length<2) return null;
+  const latest=getLatestGroupReading(well);
+  const targetWell = latest?.well || well;
+  const s=S[targetWell.id];
+  if(!s || s.status!=='online' || s.freqObs.length<2) return null;
   const trendObs=s.freqObs.slice(0, Math.min(4, s.freqObs.length));
-  const latest=trendObs[0];
-  const oldest=trendObs[trendObs.length-1];
-  if(!latest || !oldest) return null;
-  const latestTemp=tempValueAtTime(s.tempObs, latest.time, well.T0);
-  const oldestTemp=tempValueAtTime(s.tempObs, oldest.time, well.T0);
-  const latestElev=polyElev(well, latest.value, latestTemp);
-  const oldestElev=polyElev(well, oldest.value, oldestTemp);
+  const latestObs=trendObs[0];
+  const oldestObs=trendObs[trendObs.length-1];
+  if(!latestObs || !oldestObs) return null;
+  const latestTemp=tempValueAtTime(s.tempObs, latestObs.time, targetWell.T0);
+  const oldestTemp=tempValueAtTime(s.tempObs, oldestObs.time, targetWell.T0);
+  const latestElev=polyElev(targetWell, latestObs.value, latestTemp);
+  const oldestElev=polyElev(targetWell, oldestObs.value, oldestTemp);
   const delta=latestElev-oldestElev;
   if(Math.abs(delta)<0.01) return null;
   return delta>0 ? 'rising' : 'falling';
 }
 
 function renderHomeCards(){
-  document.getElementById('wellCards').innerHTML = WELLS.map(w=>{
-    const s=S[w.id];
+  const wellCards = ACTIVE_WELLS.map(w=>{
+    const latest=getLatestGroupReading(w);
+    const s=latest?.state || S[w.id];
     const isAlert=w.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
     const elevStr=s.elev!=null?fmtNum(s.elev,2):'—';
-    const isOnline=s.status==='online';
+    const isOnline=getGroupStatus(w)==='online';
     const tsClass=isAlert?'alerting':isOnline?'online':'offline';
     const meta=!isOnline
       ? (s.lastTime?'Last: '+fmtShort(s.lastTime):'No data')
@@ -1006,6 +1197,27 @@ function renderHomeCards(){
       </div>
     </div>`;
   }).join('');
+  const gateway = WELLS.find(w=>w.isGateway);
+  let gatewayCard = '';
+  if(gateway){
+    const s=S[gateway.id];
+    const isOnline=s.status==='online';
+    const dotColor=isOnline?'var(--success)':'#b94040';
+    gatewayCard = `<div class="wov wov-gateway" onclick="switchTab('${gateway.id}')">
+      <div class="wov-left">
+        <div class="wov-name" style="color:${gateway.color}">
+          <span class="ts ${isOnline?'online':'offline'}" style="width:7px;height:7px;background:${dotColor};${isOnline?'box-shadow:0 0 5px '+dotColor:''}"></span>LoRa Gateway
+        </div>
+        <div class="wov-meta">${isOnline?'Online':'Offline'} · Cellular gateway</div>
+      </div>
+      <div class="wov-gateway-data">
+        <div class="wov-gateway-row"><span>Last Connect</span><span>${s.lastConnect?fmtShort(s.lastConnect):'—'}</span></div>
+        <div class="wov-gateway-row"><span>Last Data</span><span>${s.lastData?fmtShort(s.lastData):'—'}</span></div>
+        <div class="wov-gateway-row"><span>Battery</span><span>${s.volt!=null?fmtNum(s.volt,2)+' V':'—'}</span></div>
+      </div>
+    </div>`;
+  }
+  document.getElementById('wellCards').innerHTML = wellCards + gatewayCard;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1033,7 +1245,7 @@ function initMap(){
   const baseMaps = { 'Satellite': satellite, 'Topographic': topo };
   L.control.layers(baseMaps, {}, {position:'topright'}).addTo(homeMap);
 
-  WELLS.forEach(w => {
+  ACTIVE_WELLS.forEach(w => {
     // Pulsing dot
     const dotHtml = `
       <div class="map-dot-wrap" id="mdot-${w.id}">
@@ -1067,10 +1279,11 @@ function initMap(){
 }
 
 function updateMapMarkers(){
-  WELLS.forEach(w=>{
-    const s=S[w.id];
+  ACTIVE_WELLS.forEach(w=>{
+    const latest=getLatestGroupReading(w);
+    const s=latest?.state || S[w.id];
     const isAlert=w.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
-    const isOnline=s.status==='online';
+    const isOnline=getGroupStatus(w)==='online';
     const dotColor = isAlert ? '#e05a4f' : isOnline ? '#4fada3' : '#b94040';
     const inner = document.getElementById('mdot-inner-'+w.id);
     const ring  = document.getElementById('mdot-ring-'+w.id);
@@ -1093,25 +1306,170 @@ function updateMapMarkers(){
   scheduleMapLabelLayout();
 }
 
+function renderGatewayPage(well){
+  const s = S[well.id];
+  const page = document.getElementById('page-' + well.id);
+  if(!page) return;
+  
+  const status = s.status === 'online' ? 'online' : 'offline';
+  const offline = s.status !== 'online';
+  
+  const relConnect = formatRelativeTime(s.lastConnect);
+  const relData = formatRelativeTime(s.lastData);
+  
+  const tempChartId = `gtc-${well.id}`;
+  const voltChartId = `gvc-${well.id}`;
+  const isFah = tempUnitState[well.id] === 'F';
+  
+  page.innerHTML = `
+    <div class="container">
+      <div class="well-header">
+        <h1 style="color:${well.color}">${well.name}</h1>
+        <div class="well-header-sub">
+          <span class="ts ${status}" style="width:6px;height:6px"></span>
+          <span>${status === 'online' ? 'Online' : 'Offline'}</span>
+          <span style="color:rgba(106,128,153,0.4)">·</span>
+          <span>Model ${well.model}</span>
+          <span style="color:rgba(106,128,153,0.4)">·</span>
+          <span>Serial ${well.loggerId}</span>
+          <span style="color:rgba(106,128,153,0.4)">·</span>
+          <span>IMEI ${well.imei}</span>
+        </div>
+      </div>
+      
+      ${offline ? '<div class="offline-notice">No connection received in the last 24 hours — gateway appears offline.</div>' : ''}
+
+      <!-- Hero Key Metrics Cards -->
+      <div class="key-metrics" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        <div class="metric-item">
+          <div class="metric-label">Last Connect</div>
+          <div class="metric-val" style="font-size:15px; font-weight:600; line-height:1.3; color:#e4edf5">
+            ${relConnect.primary}
+          </div>
+          <div class="metric-sub">Geokon Cloud Sync</div>
+        </div>
+        
+        <div class="metric-item">
+          <div class="metric-label">Last Data</div>
+          <div class="metric-val" style="font-size:15px; font-weight:600; line-height:1.3; color:#e4edf5">
+            ${relData.primary}
+          </div>
+          <div class="metric-sub">Remote Loggers Transmission</div>
+        </div>
+
+        <div class="metric-item">
+          <div class="metric-label">Read Interval</div>
+          <div class="metric-val" style="font-size:18px; font-weight:600; color:#e4edf5">
+            ${s.readInterval || '10 mins'}
+          </div>
+          <div class="metric-sub">Sampling Frequency</div>
+        </div>
+
+        <div class="metric-item">
+          <div class="metric-label">Power Mode</div>
+          <div class="metric-val" style="font-size:15px; font-weight:600; color:#e4edf5">
+            ${s.powerMode || 'Low Power'}
+          </div>
+          <div class="metric-sub">Power Management</div>
+        </div>
+      </div>
+
+      <!-- Unit Temperature Chart -->
+      <div class="chart-section">
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Unit Temperature</div>
+              <div class="chart-hint">Drag to zoom · Double-click to reset</div>
+            </div>
+            <div class="chart-controls">
+              <button class="thr-toggle" id="tmp-unit-btn-${well.id}" onclick="toggleTempUnit('${well.id}')" style="border-color:rgba(224,168,79,0.35);background:rgba(224,168,79,0.08);color:#e0a84f">
+                ${tempUnitState[well.id] === 'F' ? '°F / °C' : '°C / °F'}
+              </button>
+              <div class="range-btns">
+                ${['7d','30d','all'].map(r=>`<button class="rbtn ${s.range===r?'active':''}" onclick="changeRange('${well.id}','${r}')">${r==='7d'?'7D':r==='30d'?'30D':'All'}</button>`).join('')}
+              </div>
+            </div>
+          </div>
+          <div class="chart-body">
+            <button class="zoom-reset" id="zr-${tempChartId}">Reset zoom</button>
+            <div class="chart-svg-wrap" id="${tempChartId}">
+              ${!s.tempObs.length ? '<div class="offline-chart"><span style="color:var(--muted)">No temperature data available</span></div>' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Battery Voltage Chart -->
+      <div class="chart-section">
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Battery Voltage</div>
+              <div class="chart-hint">Drag to zoom · Double-click to reset</div>
+            </div>
+          </div>
+          <div class="chart-body">
+            <button class="zoom-reset" id="zr-${voltChartId}">Reset zoom</button>
+            <div class="chart-svg-wrap" id="${voltChartId}">
+              ${!s.voltObs.length ? '<div class="offline-chart"><span style="color:var(--muted)">No voltage data available</span></div>' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="info-trigger" onclick="openModal('${well.id}')">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm0 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 6.5zm0-2.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
+        Gateway &amp; System Info
+      </button>
+    </div>`;
+
+  if(s.tempObs.length){
+    const series = [...s.tempObs].reverse()
+      .map(o => ({ date: new Date(o.time), val: isFah ? cToF(o.value) : o.value }))
+      .filter(d => d.val != null);
+    drawLineChart(tempChartId, series, isFah ? '°F' : '°C', '#e0a84f');
+  }
+  if(s.voltObs.length){
+    const series = [...s.voltObs].reverse()
+      .map(o => ({ date: new Date(o.time), val: o.value }))
+      .filter(d => d.val != null);
+    drawLineChart(voltChartId, series, 'V', '#3b9edd');
+  }
+}
+
 // ══════════════════════════════════════════════════════════
 //  WELL PAGE
 // ══════════════════════════════════════════════════════════
 function renderWellPage(well){
+  well=getPrimaryWell(well);
+  if(well.isGateway){
+    renderGatewayPage(well);
+    return;
+  }
+  const group=getLoggerGroup(well);
   const s=S[well.id];
+  const latest=getLatestGroupReading(well);
+  const metricState=latest?.state || s;
+  const metricSource=latest?.well || well;
+  const status=getGroupStatus(well);
   const page=document.getElementById('page-'+well.id);
-  const isAlert=well.minePool&&s.elev!=null&&s.elev>=ALERT_ELEV;
-  const offline=s.status!=='online';
-  const margin=s.elev!=null?(ALERT_ELEV-s.elev):null;
+  const isAlert=well.minePool&&metricState.elev!=null&&metricState.elev>=ALERT_ELEV;
+  const offline=status!=='online';
+  const margin=metricState.elev!=null?(ALERT_ELEV-metricState.elev):null;
   const elevChartId=`ec-${well.id}`, deltaChartId=`dc-${well.id}`, tempChartId=`tc-${well.id}`, voltChartId=`vc-${well.id}`;
+  const hasCompare=group.length>1;
+  const latestSource=latest?displayNameFor(metricSource):'--';
+  const sourceSub=latest ? `As of ${fmtShort(metricState.lastTime)} · Source: ${latestSource}` : 'No data';
 
   const metricsHtml=`
     <div class="key-metrics">
       <div class="metric-item">
         <div class="metric-label">Water Surface Elevation</div>
         <div class="metric-val ${isAlert?'alert-val':''}">
-          ${s.elev!=null?fmtNum(s.elev,2):'—'}<span class="metric-unit">ft AMSL</span>
+          ${metricState.elev!=null?fmtNum(metricState.elev,2):'—'}<span class="metric-unit">ft AMSL</span>
         </div>
-        <div class="metric-sub">${s.lastTime?'As of '+fmtShort(s.lastTime):'No data'}</div>
+        <div class="metric-sub">${sourceSub}</div>
       </div>
       ${well.minePool?`
       <div class="metric-item">
@@ -1119,7 +1477,7 @@ function renderWellPage(well){
         <div class="metric-val ${isAlert?'alert-val':''}">
           ${margin!=null?fmtNum(margin,2):'—'}<span class="metric-unit">ft</span>
         </div>
-        <div class="metric-sub">Threshold: 3,370.00 ft AMSL</div>
+        <div class="metric-sub">Threshold: 3,370.00 ft AMSL · Source: ${latestSource}</div>
       </div>`:''}
     </div>`;
 
@@ -1127,16 +1485,16 @@ function renderWellPage(well){
     <div class="inline-alert ${isAlert?'show':''}">
       <div class="inline-alert-label">⚠ Silver Butte Adit Alert</div>
       <div class="inline-alert-body">
-        Water surface at <strong>${s.elev!=null?s.elev.toFixed(2):'—'} ft AMSL</strong> —
+        Water surface at <strong>${metricState.elev!=null?metricState.elev.toFixed(2):'—'} ft AMSL</strong> —
         ${isAlert?'at or above':'approaching'} the Silver Butte Adit outflow elevation of
         <strong>3,370.00 ft AMSL</strong>.
         ${margin!=null?`<strong>${margin.toFixed(2)} ft</strong> remaining.`:''}
       </div>
-    </div>`:'';
+    </div>`:''  ;
 
   // Threshold toggle only for mine pool wells
   const thrToggle = well.minePool
-    ? `<button class="thr-toggle" id="thr-btn-${well.id}" onclick="toggleThreshold('${well.id}')">⚠ Threshold line: ON</button>`
+    ? `<button class="thr-toggle" id="thr-btn-${well.id}" onclick="toggleThreshold('${well.id}')">⚠ Threshold line: ${thrState[well.id]?'ON':'OFF'}</button>`
     : '';
 
   page.innerHTML=`
@@ -1144,16 +1502,17 @@ function renderWellPage(well){
       <div class="well-header">
         <h1 style="color:${well.color}">${well.name}</h1>
         <div class="well-header-sub">
-          <span class="ts ${s.status==='online'?'online':'offline'}" style="width:6px;height:6px"></span>
-          <span>${s.status==='online'?'Online':'Offline'}</span>
+          <span class="ts ${well.archived ? 'offline' : status==='online'?'online':'offline'}" style="width:6px;height:6px"></span>
+          <span>${well.archived ? 'Archived' : status==='online'?'Online':'Offline'}</span>
           <span style="color:rgba(106,128,153,0.4)">·</span>
-          <span>Logger ${well.loggerId}</span>
+          <span>${hasCompare?group.length+' loggers':'Logger '+well.loggerId}</span>
           <span style="color:rgba(106,128,153,0.4)">·</span>
           <span>Sensor ${well.sensorId}</span>
+          ${latest?`<span style="color:rgba(106,128,153,0.4)">·</span><span>Latest from ${latestSource}</span>`:''}
         </div>
       </div>
       ${alertHtml}
-      ${offline?'<div class="offline-notice">No data received in the last 24 hours — instrument appears offline.</div>':''}
+      ${well.archived ? '<div class="offline-notice">Decommissioned monitoring location — showing historical data.</div>' : offline ? '<div class="offline-notice">No data received in the last 24 hours — instrument appears offline.</div>' : ''}
       ${metricsHtml}
 
       <!-- Water Elevation -->
@@ -1171,7 +1530,7 @@ function renderWellPage(well){
           <div class="chart-body">
             <button class="zoom-reset" id="zr-${elevChartId}">Reset zoom</button>
             <div class="chart-svg-wrap" id="${elevChartId}">
-              ${!s.freqObs.length?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
+              ${!groupHasObs(well,'freqObs')?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
             </div>
           </div>
         </div>
@@ -1186,7 +1545,7 @@ function renderWellPage(well){
           <div class="chart-body">
             <button class="zoom-reset" id="zr-${deltaChartId}">Reset zoom</button>
             <div class="chart-svg-wrap" id="${deltaChartId}">
-              ${computeDailyElevationChangeData(well).length?'' : '<div class="offline-chart"><span style="color:var(--muted)">Not enough daily data available</span></div>'}
+              ${group.some(w=>computeDailyElevationChangeData(w).length)?'' : '<div class="offline-chart"><span style="color:var(--muted)">Not enough daily data available</span></div>'}
             </div>
           </div>
         </div>
@@ -1204,11 +1563,12 @@ function renderWellPage(well){
           <div class="chart-body">
             <button class="zoom-reset" id="zr-${tempChartId}">Reset zoom</button>
             <div class="chart-svg-wrap" id="${tempChartId}">
-              ${!s.tempObs.length?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
+              ${!groupHasObs(well,'tempObs')?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
             </div>
           </div>
         </div>
       </div>
+
 
       <!-- Battery Voltage -->
       <div class="chart-section">
@@ -1219,7 +1579,7 @@ function renderWellPage(well){
           <div class="chart-body">
             <button class="zoom-reset" id="zr-${voltChartId}">Reset zoom</button>
             <div class="chart-svg-wrap" id="${voltChartId}">
-              ${!s.voltObs.length?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
+              ${!groupHasObs(well,'voltObs')?'<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>':''}
             </div>
           </div>
         </div>
@@ -1232,6 +1592,14 @@ function renderWellPage(well){
     </div>`;
 
   // Draw charts
+  if(hasCompare){
+    drawGroupElevChart(well, elevChartId);
+    drawGroupDailyDeltaChart(well, deltaChartId);
+    drawGroupTempChart(well, tempChartId);
+    drawGroupVoltChart(well, voltChartId);
+    return;
+  }
+  // Single-logger charts
   if(s.freqObs.length) drawElevChart(well, elevChartId);
   if(s.freqObs.length) drawDailyDeltaChart(well, deltaChartId);
   if(s.tempObs.length){
@@ -1258,28 +1626,42 @@ const tempUnitState = {};
 WELLS.forEach(w=>{ tempUnitState[w.id]='F'; });
 
 function toggleTempUnit(wellId){
-  tempUnitState[wellId] = tempUnitState[wellId]==='F' ? 'C' : 'F';
-  const btn=document.getElementById('tmp-unit-btn-'+wellId);
-  if(btn) btn.textContent = tempUnitState[wellId]==='F' ? '°F / °C' : '°C / °F';
-  // Redraw temperature chart only
-  const s=S[wellId], well=WELLS.find(w=>w.id===wellId);
-  if(!s.tempObs.length||!well) return;
-  const isFah = tempUnitState[wellId]==='F';
-  const series=[...s.tempObs].reverse()
-    .map(o=>({date:new Date(o.time), val:isFah?cToF(o.value):o.value}))
-    .filter(d=>d.val!=null);
-  drawLineChart(`tc-${wellId}`, series, isFah?'°F':'°C', '#e0a84f');
+  const well=getPrimaryWell(WELLS.find(w=>w.id===wellId));
+  if(!well) return;
+  tempUnitState[well.id] = tempUnitState[well.id]==='F' ? 'C' : 'F';
+  const btn=document.getElementById('tmp-unit-btn-'+well.id);
+  if(btn) btn.textContent = tempUnitState[well.id]==='F' ? '°F / °C' : '°C / °F';
+  
+  const containerId=`tc-${well.id}`;
+  const group=getLoggerGroup(well);
+  if(group.length>1){
+    drawGroupTempChart(well, containerId);
+  } else if(groupHasObs(well,'tempObs')){
+    const s=S[well.id];
+    const isFah = tempUnitState[well.id]==='F';
+    const series=[...s.tempObs].reverse()
+      .map(o=>({date:new Date(o.time), val:isFah?cToF(o.value):o.value}))
+      .filter(d=>d.val!=null);
+    drawLineChart(containerId, series, isFah?'°F':'°C', '#e0a84f');
+  }
 }
 
 function toggleThreshold(wellId){
-  thrState[wellId] = !thrState[wellId];
-  const btn=document.getElementById('thr-btn-'+wellId);
+  const well=getPrimaryWell(WELLS.find(w=>w.id===wellId));
+  if(!well) return;
+  thrState[well.id] = !thrState[well.id];
+  const btn=document.getElementById('thr-btn-'+well.id);
   if(btn){
-    btn.textContent=`⚠ Threshold line: ${thrState[wellId]?'ON':'OFF'}`;
-    btn.classList.toggle('off',!thrState[wellId]);
+    btn.textContent=`⚠ Threshold line: ${thrState[well.id]?'ON':'OFF'}`;
+    btn.classList.toggle('off',!thrState[well.id]);
   }
-  const well=WELLS.find(w=>w.id===wellId);
-  if(well&&S[wellId].freqObs.length) drawElevChart(well,`ec-${wellId}`);
+  const containerId=`ec-${well.id}`;
+  const group=getLoggerGroup(well);
+  if(group.length>1){
+    drawGroupElevChart(well, containerId);
+  } else if(groupHasObs(well,'freqObs')){
+    drawElevChart(well, containerId);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1320,6 +1702,457 @@ function computeDailyElevationChangeData(well){
     out.push({ date: dayKeyToDate(dayKey), val: elev-prevElev, dayKey });
   }
   return out;
+}
+
+function drawGroupElevChart(well, containerId){
+  const series=getLoggerGroup(well).map(w=>({
+    id:w.id, label:displayNameFor(w), color:w.color, data:elevationSeriesFor(w)
+  })).filter(s=>s.data.length);
+  const showThr = well.minePool && thrState[well.id];
+  drawMultiLineChart(containerId, series, 'ft AMSL', showThr ? ALERT_ELEV : null, '3,370 ft — Silver Butte Adit');
+}
+
+function drawGroupDailyDeltaChart(well, containerId){
+  const series=getLoggerGroup(well).map(w=>({
+    id:w.id, label:displayNameFor(w), color:w.color, data:computeDailyElevationChangeData(w)
+  })).filter(s=>s.data.length);
+  drawGroupDailyBarChart(containerId, series);
+}
+
+function drawGroupDailyBarChart(containerId, series){
+  const wrap=document.getElementById(containerId);
+  if(!wrap || !series.length) return;
+  wrap.innerHTML='';
+
+  const margin={top:12,right:18,bottom:38,left:68};
+  const totalH=220;
+  const H=totalH-margin.top-margin.bottom;
+  const getW=()=>(wrap.getBoundingClientRect().width||800);
+  let width=getW()-margin.left-margin.right;
+
+  const allDayKeys=new Set();
+  series.forEach(s=>s.data.forEach(d=>allDayKeys.add(d.dayKey)));
+  const sortedDayKeys=[...allDayKeys].sort();
+
+  const seriesMap={};
+  series.forEach(s=>{
+    seriesMap[s.id]={};
+    s.data.forEach(d=>{ seriesMap[s.id][d.dayKey]=d; });
+  });
+
+  const allDates=sortedDayKeys.map(k=>dayKeyToDate(k));
+  const xExt=d3.extent(allDates);
+
+  const svg=d3.select(wrap).append('svg')
+    .attr('height',totalH).attr('width',getW()).style('display','block');
+  const defs=svg.append('defs');
+  const clipId='cl-'+containerId;
+  defs.append('clipPath').attr('id',clipId)
+    .append('rect').attr('width',width).attr('height',H+12).attr('y',-6);
+
+  const g=svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+  svg.append('text')
+    .attr('transform',`translate(13,${margin.top+H/2}) rotate(-90)`)
+    .attr('text-anchor','middle')
+    .attr('fill','var(--muted)')
+    .attr('font-family','var(--mono)')
+    .attr('font-size',10)
+    .attr('letter-spacing','0.06em')
+    .text('ft/day');
+
+  let xFull=d3.scaleTime().domain(xExt).range([0,width]);
+  let xCur=xFull.copy();
+
+  const hidden=new Set();
+
+  const allVals=series.flatMap(s=>s.data.map(d=>d.val));
+  const maxAbs=Math.max(d3.max(allVals,d=>Math.abs(d))||0.05, 0.05);
+  const yScale=d3.scaleLinear().domain([-(maxAbs*1.15), maxAbs*1.15]).range([H,0]).nice();
+
+  const xAxis=g.append('g').attr('class','axis').attr('transform',`translate(0,${H})`);
+  const yAxis=g.append('g').attr('class','axis');
+  const yGrid=g.append('g');
+  const clipG=g.append('g').attr('clip-path',`url(#${clipId})`);
+
+  const zeroLine=clipG.append('line')
+    .attr('x1',0).attr('x2',width)
+    .attr('y1',yScale(0)).attr('y2',yScale(0))
+    .attr('stroke','rgba(255,255,255,0.16)').attr('stroke-width',1);
+
+  const barsG=clipG.append('g');
+  const xhair=clipG.append('line').attr('class','crosshair').attr('y1',0).attr('y2',H);
+
+  function redrawAxes(){
+    const spanDays=(xCur.domain()[1]-xCur.domain()[0])/86400e3;
+    const tickFmt=spanDays>180?d3.timeFormat('%b %Y'):d3.timeFormat('%b %d');
+    xAxis.call(d3.axisBottom(xCur).ticks(6).tickFormat(tickFmt))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    xAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    xAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.call(d3.axisLeft(yScale).ticks(5).tickFormat(v=>v.toFixed(2)))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    yAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yGrid.call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+    yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+    yGrid.select('.domain').remove();
+  }
+
+  function redrawBars(){
+    const [d0,d1]=xCur.domain();
+    const visibleKeys=sortedDayKeys.filter(k=>{
+      const dt=dayKeyToDate(k);
+      return dt>=d0 && dt<=d1;
+    });
+    const visSeries=series.filter(s=>!hidden.has(s.id));
+    const n=visSeries.length;
+    const slotW=n===0 ? 0 : Math.max(6*n+4, Math.min(36*n, width/Math.max(visibleKeys.length,1)*0.7));
+    const subBarW=n===0 ? 0 : Math.max(3, (slotW/n)*0.88);
+
+    const barData=[];
+    sortedDayKeys.forEach(k=>{
+      visSeries.forEach((s,si)=>{
+        const pt=seriesMap[s.id][k];
+        if(pt) barData.push({dayKey:k, date:pt.date, val:pt.val, seriesIdx:si, color:s.color, label:s.label, id:s.id});
+      });
+    });
+
+    barsG.selectAll('rect').data(barData, d=>d.dayKey+d.id).join('rect')
+      .attr('x',d=>{
+        const cx=xCur(d.date);
+        const offset=(d.seriesIdx-(n-1)/2)*subBarW;
+        return cx+offset-subBarW/2;
+      })
+      .attr('width',subBarW)
+      .attr('y',d=>Math.min(yScale(d.val), yScale(0)))
+      .attr('height',d=>Math.max(1, Math.abs(yScale(d.val)-yScale(0))))
+      .attr('rx',2)
+      .attr('fill',d=>d.val>=0 ? d.color : '#e05a4f')
+      .attr('opacity',0.85);
+
+    zeroLine.attr('x2',width).attr('y1',yScale(0)).attr('y2',yScale(0));
+  }
+
+  function redraw(){ redrawAxes(); redrawBars(); }
+  redraw();
+
+  let isZoomed=false;
+  const zrBtn=document.getElementById('zr-'+containerId);
+  const brushG=clipG.append('g');
+  const brush=d3.brushX().extent([[0,0],[width,H]]).on('end',ev=>{
+    if(!ev.selection) return;
+    const [p0,p1]=ev.selection;
+    if(Math.abs(p1-p0)<5) return;
+    xCur=xFull.copy().domain([xCur.invert(p0),xCur.invert(p1)]);
+    isZoomed=true;
+    if(zrBtn) zrBtn.classList.add('visible');
+    brushG.call(brush.move,null);
+    redraw();
+  });
+  brushG.call(brush);
+  brushG.select('.overlay').style('cursor','crosshair');
+
+  const tip=document.getElementById('globalTip');
+  const TIP_W=220;
+  brushG.select('.overlay')
+    .on('mousemove.tip',function(ev){
+      const [mx]=d3.pointer(ev,g.node());
+      if(mx<0||mx>width){ tip.style.opacity='0'; xhair.style('opacity',0); return; }
+      const hDate=xCur.invert(mx);
+      let closestKey=null, closestDist=Infinity;
+      sortedDayKeys.forEach(k=>{
+        const dt=dayKeyToDate(k);
+        const dist=Math.abs(dt-hDate);
+        if(dist<closestDist){ closestDist=dist; closestKey=k; }
+      });
+      if(!closestKey){ tip.style.opacity='0'; xhair.style('opacity',0); return; }
+      let closestDate=null;
+      series.forEach(s=>{ if(seriesMap[s.id][closestKey]) closestDate=seriesMap[s.id][closestKey].date; });
+      if(!closestDate){ tip.style.opacity='0'; xhair.style('opacity',0); return; }
+      const cx=xCur(closestDate);
+      xhair.attr('x1',cx).attr('x2',cx).style('opacity',1);
+      document.getElementById('tipDate').textContent=d3.timeFormat('%b %d, %Y')(closestDate);
+      const rows=series.map(s=>{
+        const pt=seriesMap[s.id][closestKey];
+        if(!pt) return `<div class="tip-row"><span style="color:${s.color}">${s.label}</span><span style="color:var(--muted)">—</span></div>`;
+        return `<div class="tip-row"><span style="color:${s.color}">${s.label}</span><span>${pt.val>=0?'+':''}${pt.val.toFixed(3)} ft</span></div>`;
+      }).join('');
+      document.getElementById('tipRows').innerHTML=rows;
+      tip.style.opacity='1';
+      const clientX=ev.clientX, winW=window.innerWidth;
+      tip.style.left=(clientX+TIP_W+24>winW?clientX-TIP_W-12:clientX+18)+'px';
+      tip.style.top=(ev.clientY-40)+'px';
+    })
+    .on('mouseleave.tip',()=>{ tip.style.opacity='0'; xhair.style('opacity',0); });
+
+  svg.on('dblclick',()=>{
+    if(!isZoomed) return;
+    xCur=xFull.copy(); isZoomed=false;
+    if(zrBtn) zrBtn.classList.remove('visible');
+    redraw();
+  });
+  if(zrBtn) zrBtn.onclick=()=>{ xCur=xFull.copy(); isZoomed=false; zrBtn.classList.remove('visible'); redraw(); };
+
+  bindChartResize(containerId,()=>{
+    const nw=getW()-margin.left-margin.right;
+    if(Math.abs(nw-width)<2) return;
+    width=nw;
+    svg.attr('width',getW());
+    xFull.range([0,width]);
+    if(!isZoomed) xCur=xFull.copy();
+    brush.extent([[0,0],[width,H]]); brushG.call(brush);
+    redraw();
+  });
+
+  const existingLegend=wrap.parentElement.querySelector('.home-chart-legend');
+  if(existingLegend) existingLegend.remove();
+  const legendWrap=document.createElement('div');
+  legendWrap.className='home-chart-legend';
+  series.forEach(s=>{
+    const btn=document.createElement('button');
+    btn.className='hcl-btn';
+    btn.style.cssText=`background:${s.color}22;border-color:${s.color}66;color:${s.color}`;
+    btn.textContent=s.label;
+    btn.onclick=()=>{
+      if(hidden.has(s.id)){
+        hidden.delete(s.id);
+      } else if(hidden.size < series.length-1){
+        hidden.add(s.id);
+      }
+      btn.classList.toggle('hidden', hidden.has(s.id));
+      redrawBars();
+    };
+    legendWrap.appendChild(btn);
+  });
+  wrap.parentElement.appendChild(legendWrap);
+}
+
+function drawGroupTempChart(well, containerId){
+  const isFah = tempUnitState[well.id]==='F';
+  const series=getLoggerGroup(well).map(w=>({
+    id:w.id,
+    label:displayNameFor(w),
+    color:w.color,
+    data:[...S[w.id].tempObs].reverse()
+      .map(o=>({date:new Date(o.time), val:isFah?cToF(o.value):o.value}))
+      .filter(d=>d.val!=null)
+  })).filter(s=>s.data.length);
+  drawMultiLineChart(containerId, series, isFah?'°F':'°C');
+}
+
+function drawGroupVoltChart(well, containerId){
+  const series=getLoggerGroup(well).map(w=>({
+    id:w.id,
+    label:displayNameFor(w),
+    color:w.color,
+    data:[...S[w.id].voltObs].reverse()
+      .map(o=>({date:new Date(o.time), val:o.value}))
+      .filter(d=>d.val!=null)
+  })).filter(s=>s.data.length);
+  drawMultiLineChart(containerId, series, 'V');
+}
+
+function drawMultiLineChart(containerId, series, unit, thresholdVal, thresholdLabel){
+  const wrap=document.getElementById(containerId);
+  if(!wrap || !series.length) return;
+  wrap.innerHTML='';
+
+  const margin={top:12,right:18,bottom:38,left:68};
+  const totalH=230;
+  const H=totalH-margin.top-margin.bottom;
+  const getW=()=>(wrap.getBoundingClientRect().width||800);
+  let width=getW()-margin.left-margin.right;
+  const hidden=new Set();
+
+  const svg=d3.select(wrap).append('svg')
+    .attr('height',totalH).attr('width',getW()).style('display','block');
+  const defs=svg.append('defs');
+  const clipId='cl-'+containerId;
+  defs.append('clipPath').attr('id',clipId)
+    .append('rect').attr('width',width).attr('height',H+12).attr('y',-6);
+
+  const g=svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+  const yLabel=svg.append('text')
+    .attr('transform', `translate(13, ${margin.top + H/2}) rotate(-90)`)
+    .attr('text-anchor','middle')
+    .attr('fill','var(--muted)')
+    .attr('font-family','var(--mono)')
+    .attr('font-size',10)
+    .attr('letter-spacing','0.06em')
+    .text(unit);
+
+  const allDates=series.flatMap(s=>s.data.map(d=>d.date));
+  const xExt=d3.extent(allDates);
+  let xFull=d3.scaleTime().domain(xExt).range([0,width]);
+  let xCur=xFull.copy();
+
+  function visibleSeries(){
+    return series.filter(s=>!hidden.has(s.id));
+  }
+  function computeYDomain(x0, x1){
+    const vals=[];
+    visibleSeries().forEach(s=>{
+      s.data.filter(d=>d.date>=x0&&d.date<=x1).forEach(d=>vals.push(d.val));
+    });
+    if(thresholdVal!=null) vals.push(thresholdVal);
+    const src=vals.length?vals:series.flatMap(s=>s.data.map(d=>d.val));
+    const mn=d3.min(src), mx=d3.max(src);
+    const pad=(mx-mn)*0.08||0.5;
+    return [mn-pad, mx+pad];
+  }
+
+  const yScale=d3.scaleLinear().domain(computeYDomain(xExt[0],xExt[1])).range([H,0]).nice();
+  const xAxis=g.append('g').attr('class','axis').attr('transform',`translate(0,${H})`);
+  const yAxis=g.append('g').attr('class','axis');
+  const yGrid=g.append('g').call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+  yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+  yGrid.select('.domain').remove();
+
+  const clipG=g.append('g').attr('clip-path',`url(#${clipId})`);
+  const linePaths={}, areaPaths={}, dots={};
+  series.forEach(s=>{
+    const gradId=`mg-${containerId}-${s.id}`;
+    const grad=defs.append('linearGradient').attr('id',gradId)
+      .attr('x1','0').attr('x2','0').attr('y1','0').attr('y2','1');
+    grad.append('stop').attr('offset','0%').attr('stop-color',s.color).attr('stop-opacity',0.12);
+    grad.append('stop').attr('offset','100%').attr('stop-color',s.color).attr('stop-opacity',0);
+    const areaGen=d3.area().x(d=>xCur(d.date)).y0(H).y1(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+    const lineGen=d3.line().x(d=>xCur(d.date)).y(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+    areaPaths[s.id]=clipG.append('path').datum(s.data).attr('fill',`url(#${gradId})`).attr('d',areaGen);
+    linePaths[s.id]=clipG.append('path').datum(s.data).attr('fill','none').attr('stroke',s.color)
+      .attr('stroke-width',1.8).attr('d',lineGen);
+    dots[s.id]=clipG.append('circle').attr('r',4).attr('fill',s.color)
+      .attr('stroke','var(--bg)').attr('stroke-width',2).style('opacity',0);
+  });
+
+  let thrLineEl=null, thrTextEl=null;
+  if(thresholdVal!=null){
+    thrLineEl=clipG.append('line').attr('class','threshold-line')
+      .attr('x1',0).attr('x2',width)
+      .attr('y1',yScale(thresholdVal)).attr('y2',yScale(thresholdVal));
+    thrTextEl=clipG.append('text')
+      .attr('x',4).attr('y',yScale(thresholdVal)-5)
+      .attr('fill','rgba(224,90,79,0.75)').attr('font-family','var(--mono)').attr('font-size',9)
+      .text(thresholdLabel||String(thresholdVal));
+  }
+
+  const xhair=clipG.append('line').attr('class','crosshair').attr('y1',0).attr('y2',H);
+
+  function redrawAxes(){
+    const spanDays=(xCur.domain()[1]-xCur.domain()[0])/86400e3;
+    const tickFmt=spanDays>180?d3.timeFormat('%b %Y'):d3.timeFormat('%b %d');
+    xAxis.call(d3.axisBottom(xCur).ticks(6).tickFormat(tickFmt))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    xAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    xAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.call(d3.axisLeft(yScale).ticks(5).tickFormat(v=>
+      unit==='ft AMSL'?v.toFixed(0):unit==='V'?v.toFixed(2):v.toFixed(2)))
+      .select('.domain').attr('stroke','rgba(255,255,255,0.06)');
+    yAxis.selectAll('text').attr('fill','var(--muted)').attr('font-family','var(--mono)').attr('font-size',10);
+    yAxis.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.06)');
+    yGrid.call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
+    yGrid.selectAll('line').attr('stroke','rgba(255,255,255,0.04)');
+    yGrid.select('.domain').remove();
+  }
+
+  function redraw(){
+    const [d0,d1]=xCur.domain();
+    yScale.domain(computeYDomain(d0,d1)).nice();
+    series.forEach(s=>{
+      const areaGen=d3.area().x(d=>xCur(d.date)).y0(H).y1(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+      const lineGen=d3.line().x(d=>xCur(d.date)).y(d=>yScale(d.val)).curve(d3.curveMonotoneX);
+      areaPaths[s.id].attr('d',areaGen);
+      linePaths[s.id].attr('d',lineGen);
+    });
+    if(thrLineEl) thrLineEl.attr('x1',0).attr('x2',width)
+      .attr('y1',yScale(thresholdVal)).attr('y2',yScale(thresholdVal));
+    if(thrTextEl) thrTextEl.attr('y',yScale(thresholdVal)-5);
+    redrawAxes();
+  }
+  redrawAxes();
+
+  let isZoomed=false;
+  const zrBtn=document.getElementById('zr-'+containerId);
+  const brushG=clipG.append('g');
+  const brush=d3.brushX().extent([[0,0],[width,H]]).on('end',ev=>{
+    if(!ev.selection) return;
+    const [p0,p1]=ev.selection;
+    if(Math.abs(p1-p0)<5) return;
+    xCur=xFull.copy().domain([xCur.invert(p0),xCur.invert(p1)]);
+    isZoomed=true;
+    if(zrBtn) zrBtn.classList.add('visible');
+    brushG.call(brush.move,null);
+    redraw();
+  });
+  brushG.call(brush);
+  brushG.select('.overlay').style('cursor','crosshair');
+
+  const tip=document.getElementById('globalTip');
+  const TIP_W=220;
+  brushG.select('.overlay')
+    .on('mousemove.tip',function(ev){
+      const [mx]=d3.pointer(ev,g.node());
+      if(mx<0||mx>width){ tip.style.opacity='0'; xhair.style('opacity',0); Object.values(dots).forEach(d=>d.style('opacity',0)); return; }
+      const hDate=xCur.invert(mx);
+      xhair.attr('x1',mx).attr('x2',mx).style('opacity',1);
+      Object.values(dots).forEach(d=>d.style('opacity',0));
+      const rows=visibleSeries().map(s=>{
+        const closest=s.data.reduce((a,b)=>Math.abs(a.date-hDate)<Math.abs(b.date-hDate)?a:b);
+        const cx=xCur(closest.date), cy=yScale(closest.val);
+        dots[s.id].attr('cx',cx).attr('cy',cy).style('opacity',1);
+        const decimals=unit==='ft AMSL'?2:unit==='V'?3:3;
+        const disp=unit==='ft AMSL'?fmtNum(closest.val,2):closest.val.toFixed(decimals);
+        return `<div class="tip-row"><span style="color:${s.color}">${s.label}</span><span>${disp}</span></div>`;
+      }).join('');
+      document.getElementById('tipDate').textContent=d3.timeFormat('%b %d, %Y %H:%M')(hDate);
+      document.getElementById('tipRows').innerHTML=rows;
+      tip.style.opacity='1';
+      const cx=ev.clientX, ww=window.innerWidth;
+      tip.style.left=(cx+TIP_W+24>ww?cx-TIP_W-12:cx+18)+'px';
+      tip.style.top=(ev.clientY-40)+'px';
+    })
+    .on('mouseleave.tip',()=>{
+      tip.style.opacity='0';
+      xhair.style('opacity',0);
+      Object.values(dots).forEach(d=>d.style('opacity',0));
+    });
+
+  svg.on('dblclick',()=>{ if(!isZoomed) return; xCur=xFull.copy(); isZoomed=false; if(zrBtn) zrBtn.classList.remove('visible'); redraw(); });
+  if(zrBtn) zrBtn.onclick=()=>{ xCur=xFull.copy(); isZoomed=false; zrBtn.classList.remove('visible'); redraw(); };
+
+  bindChartResize(containerId, ()=>{
+    const nw=getW()-margin.left-margin.right;
+    if(Math.abs(nw-width)<2) return;
+    width=nw;
+    svg.attr('width',getW());
+    xFull.range([0,width]);
+    if(!isZoomed) xCur=xFull.copy();
+    brush.extent([[0,0],[width,H]]); brushG.call(brush);
+    yLabel.attr('transform',`translate(13, ${margin.top + H/2}) rotate(-90)`);
+    redraw();
+  });
+
+  const existingLegend = wrap.parentElement.querySelector('.home-chart-legend');
+  if(existingLegend) existingLegend.remove();
+  const legendWrap=document.createElement('div');
+  legendWrap.className='home-chart-legend';
+  series.forEach(s=>{
+    const btn=document.createElement('button');
+    btn.className='hcl-btn';
+    btn.style.cssText=`background:${s.color}22;border-color:${s.color}66;color:${s.color}`;
+    btn.textContent=s.label;
+    btn.onclick=()=>{
+      if(hidden.has(s.id)) hidden.delete(s.id);
+      else if(hidden.size < series.length-1) hidden.add(s.id);
+      btn.classList.toggle('hidden', hidden.has(s.id));
+      const vis=!hidden.has(s.id);
+      linePaths[s.id].style('opacity',vis?1:0);
+      areaPaths[s.id].style('opacity',vis?1:0);
+      redraw();
+    };
+    legendWrap.appendChild(btn);
+  });
+  wrap.parentElement.appendChild(legendWrap);
 }
 
 function drawElevChart(well, containerId){
@@ -1674,9 +2507,10 @@ function drawLineChart(containerId, data, unit, lineColor, thresholdVal, thresho
 //  CHANGE RANGE
 // ══════════════════════════════════════════════════════════
 async function changeRange(wellId, range){
-  const well=WELLS.find(w=>w.id===wellId);
-  S[wellId].range=range;
-  await loadWell(well,range);
+  const well=getPrimaryWell(WELLS.find(w=>w.id===wellId));
+  if(!well) return;
+  getLoggerGroup(well).forEach(w=>{ S[w.id].range=range; });
+  await Promise.all(getLoggerGroup(well).map(w=>loadWell(w,range)));
   renderWellPage(well);
 }
 
@@ -1684,33 +2518,68 @@ async function changeRange(wellId, range){
 //  MODAL
 // ══════════════════════════════════════════════════════════
 function openModal(wellId){
-  const well=WELLS.find(w=>w.id===wellId);
-  const s=S[wellId];
-  const lc=s.loggerInfo?.configuration||{}, lp=s.loggerInfo?.properties||{};
-  document.getElementById('modalContent').innerHTML=`
-    <h3>${well.name}</h3>
-    <div class="modal-sub">${well.minePool?'Mine Pool':'Monitoring Well'} · ${well.lat.toFixed(7)}, ${well.lng.toFixed(7)}</div>
-    <div class="modal-section">Logger</div>
+  const well=getPrimaryWell(WELLS.find(w=>w.id===wellId));
+  if(!well) return;
+  if(well.isGateway){
+    const s=S[well.id];
+    const lc=s.loggerInfo?.configuration||{}, lp=s.loggerInfo?.properties||{};
+    document.getElementById('modalContent').innerHTML=`
+      <h3>${well.name}</h3>
+      <div class="modal-sub">Model: ${well.model} · Network: ${well.networkType}</div>
+      <div class="modal-section">Gateway Hardware &amp; Connection</div>
+      <table><tbody>
+        <tr><td>Gateway Model</td><td>${well.model}</td></tr>
+        <tr><td>Serial Number</td><td>${well.loggerId}</td></tr>
+        <tr><td>Cellular IMEI</td><td>${well.imei}</td></tr>
+        <tr><td>Network Type</td><td>${well.networkType}</td></tr>
+        <tr><td>Data Type</td><td>${lp.dataTypeDescription||lp.dataType||'LoRa Gateway'}</td></tr>
+        <tr><td>Last Connect</td><td>${s.lastConnect ? fmtD(s.lastConnect) : '—'}</td></tr>
+        <tr><td>Last Data</td><td>${s.lastData ? fmtD(s.lastData) : '—'}</td></tr>
+      </tbody></table>
+      <div class="modal-section">Logging Configuration</div>
+      <table><tbody>
+        <tr><td>Read Interval</td><td>${s.readInterval||'10 mins'}</td></tr>
+        <tr><td>Power Mode</td><td>${s.powerMode||'Low Power'}</td></tr>
+        <tr><td>GeoNet Off Time</td><td>${lc.geonet?.radioOffTime ? lc.geonet.radioOffTime + ' s' : '—'}</td></tr>
+        <tr><td>GeoNet On Time</td><td>${lc.geonet?.radioOnTime ? lc.geonet.radioOnTime + ' s' : '—'}</td></tr>
+        <tr><td>API Server</td><td>data.geokon.com (JSON-RPC 2.0)</td></tr>
+      </tbody></table>`;
+    document.getElementById('modalOverlay').classList.add('open');
+    return;
+  }
+  const group=getLoggerGroup(well);
+  const sections=group.map(unit=>{
+    const s=S[unit.id];
+    const lc=s.loggerInfo?.configuration||{}, lp=s.loggerInfo?.properties||{};
+    return `
+    <div class="modal-section">${displayNameFor(unit)}</div>
     <table><tbody>
-      <tr><td>Logger Serial</td><td>${well.loggerId}</td></tr>
-      <tr><td>Sensor Serial</td><td>${well.sensorId}</td></tr>
-      <tr><td>Data Type</td><td>${lp.dataTypeDescription||lp.dataType||'—'}</td></tr>
+      <tr><td>Logger Serial</td><td>${unit.loggerId}</td></tr>
+      <tr><td>Sensor Serial</td><td>${unit.sensorId}</td></tr>
+      <tr><td>Data Type</td><td>${lp.dataTypeDescription||lp.dataType||'Vibrating Wire'}</td></tr>
+      <tr><td>Sensor Type</td><td>VW Piezometer (4500S-350 kPa)</td></tr>
       <tr><td>Node Type</td><td>${lp.nodeTypeDescription||lp.nodeType||'—'}</td></tr>
       <tr><td>Power Mode</td><td>${lc.logging?.powerModeDescription||lc.logging?.powerMode||'—'}</td></tr>
       <tr><td>Last Observation</td><td>${s.lastTime?fmtD(s.lastTime):'—'}</td></tr>
     </tbody></table>
-    <div class="modal-section">Calibration</div>
+    <div class="modal-section">Calibration · ${displayNameFor(unit)}</div>
     <table><tbody>
       <tr><td>Method</td><td>Polynomial · VW Digits (f²÷1000)</td></tr>
-      <tr><td>A</td><td>${well.A}</td></tr>
-      <tr><td>B</td><td>${well.B}</td></tr>
-      <tr><td>C</td><td>${well.C.toFixed(9)}</td></tr>
-      <tr><td>K (thermal)</td><td>${well.K}</td></tr>
-      <tr><td>R₀ (zero digits)</td><td>${well.R0} ≈ ${Math.sqrt(well.R0*1000).toFixed(0)} Hz</td></tr>
-      <tr><td>T₀ (zero temp)</td><td>${well.T0} °C</td></tr>
+      <tr><td>A</td><td>${unit.A}</td></tr>
+      <tr><td>B</td><td>${unit.B}</td></tr>
+      <tr><td>C</td><td>${unit.C.toFixed(9)}</td></tr>
+      <tr><td>K (thermal)</td><td>${unit.K}</td></tr>
+      <tr><td>R₀ (zero digits)</td><td>${unit.R0} ≈ ${Math.sqrt(unit.R0*1000).toFixed(0)} Hz</td></tr>
+      <tr><td>T₀ (zero temp)</td><td>${unit.T0} °C</td></tr>
       <tr><td>Multiplier</td><td>0.334553 (kPa → ft H₂O)</td></tr>
-      <tr><td>Sensor Elevation</td><td>${well.sensorElev.toFixed(2)} ft AMSL</td></tr>
+      <tr><td>Sensor Elevation</td><td>${unit.sensorElev.toFixed(2)} ft AMSL</td></tr>
     </tbody></table>`;
+  }).join('');
+
+  document.getElementById('modalContent').innerHTML=`
+    <h3>${well.name}</h3>
+    <div class="modal-sub">${well.minePool?'Mine Pool':'Monitoring Well'} · ${well.lat.toFixed(7)}, ${well.lng.toFixed(7)}</div>
+    ${sections}`;
   document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(ev){
@@ -1904,17 +2773,20 @@ function drawHomeElevChart(){
   const wrap=document.getElementById('home-elev-chart');
   if(!wrap) return;
 
-  // Build series for each well
-  const series=WELLS.map(w=>{
-    const s=S[w.id];
-    if(!s.freqObs.length) return {well:w,data:[]};
-    const freqs=[...s.freqObs].reverse();
-    const data=freqs.map(f=>({
-      date:new Date(f.time),
-      val:polyElev(w,f.value,tempValueAtTime(s.tempObs, f.time, w.T0))
-    })).filter(d=>isFinite(d.val));
-    return {well:w,data};
-  }).filter(s=>s.data.length>0);
+  // Build series for each logger (expand groups so secondary loggers like MW-8R LoRa are included)
+  const series=ACTIVE_WELLS.flatMap(primary=>{
+    return getLoggerGroup(primary).map(w=>{
+      const s=S[w.id];
+      if(!s.freqObs.length) return null;
+      const freqs=[...s.freqObs].reverse();
+      const data=freqs.map(f=>({
+        date:new Date(f.time),
+        val:polyElev(w,f.value,tempValueAtTime(s.tempObs, f.time, w.T0))
+      })).filter(d=>isFinite(d.val));
+      if(!data.length) return null;
+      return {well:{...primary, id:w.id, color:w.color, shortName:w.shortName},data};
+    }).filter(Boolean);
+  });
 
   if(!series.length){
     wrap.innerHTML='<div class="offline-chart"><span style="color:var(--muted)">No data available</span></div>';
@@ -2126,15 +2998,61 @@ function drawHomeElevChart(){
 function switchTab(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('page-'+id).classList.add('active');
-  document.getElementById('tab-'+id).classList.add('active');
-  activeTab=id;
+  
+  const page=document.getElementById('page-'+id);
+  if(page) page.classList.add('active');
+  
   const w=WELLS.find(x=>x.id===id);
+  if(w && w.archived){
+    const ab=document.getElementById('tab-archived');
+    if(ab) ab.classList.add('active');
+  } else {
+    const tb=document.getElementById('tab-'+id);
+    if(tb) tb.classList.add('active');
+  }
+  
+  activeTab=id;
   if(w) renderWellPage(w);
+  else if(id==='archived') renderArchivedPage();
   else if(id==='home'&&homeMap){
     setTimeout(()=>homeMap.invalidateSize(),60);
     drawHomeElevChart();
   }
+}
+
+function renderArchivedPage(){
+  const container = document.getElementById('archivedCards');
+  if(!container) return;
+
+  container.innerHTML = ARCHIVED_WELLS.map(w=>{
+    const latest=getLatestGroupReading(w);
+    const s=latest?.state || S[w.id];
+    const elevStr=s.elev!=null?fmtNum(s.elev,2):'—';
+    const meta=s.lastTime?'Last data: '+fmtShort(s.lastTime):'No data';
+    const dotColor='#b94040';
+
+    let dateRangeStr = '';
+    if (s.freqObs.length > 0) {
+      const firstDate = new Date(s.freqObs[s.freqObs.length - 1].time).toLocaleDateString();
+      const lastDate = new Date(s.freqObs[0].time).toLocaleDateString();
+      dateRangeStr = `<div class="wov-meta" style="margin-top:4px; font-size:10px; opacity:0.8">Active range: ${firstDate} - ${lastDate}</div>`;
+    }
+
+    return `<div class="wov" onclick="switchTab('${w.id}')">
+      <div class="wov-left">
+        <div class="wov-name" style="color:${w.color}">
+          <span class="ts offline" style="width:7px;height:7px;background:${dotColor}"></span>${w.name}
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:1px 4px;margin-left:8px;font-weight:normal;">ARCHIVED</span>
+        </div>
+        <div class="wov-meta">Decommissioned · ${meta}</div>
+        ${dateRangeStr}
+      </div>
+      <div class="wov-right">
+        <div class="wov-elev"><span>${elevStr}</span></div>
+        <div class="wov-elevlabel">ft AMSL</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════════
