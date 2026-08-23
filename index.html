@@ -138,9 +138,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .wov-trend.rising{color:var(--success)}
 .wov-trend.falling{color:var(--accent)}
 .wov-gateway{align-items:flex-start}
-.wov-gateway-data{display:grid;grid-template-columns:1fr;gap:4px;min-width:190px;text-align:right;font-family:var(--mono)}
-.wov-gateway-row{display:flex;justify-content:space-between;gap:14px;font-size:10px;color:var(--muted)}
-.wov-gateway-row span:last-child{color:var(--text);font-weight:500}
+.wov-gateway-data{display:grid;grid-template-columns:1fr;gap:4px;min-width:190px;font-family:var(--mono)}
+.wov-gateway-row{display:grid;grid-template-columns:minmax(82px,auto) minmax(0,1fr);gap:14px;font-size:10px;color:var(--muted);align-items:start}
+.wov-gateway-row span:first-child{text-align:left;white-space:nowrap}
+.wov-gateway-row span:last-child{color:var(--text);font-weight:500;text-align:right;min-width:0}
 
 /* ── MAP MARKER DOTS ── */
 .map-dot-wrap{position:relative;width:14px;height:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
@@ -1208,7 +1209,7 @@ function renderHomeCards(){
         <div class="wov-name" style="color:${gateway.color}">
           <span class="ts ${isOnline?'online':'offline'}" style="width:7px;height:7px;background:${dotColor};${isOnline?'box-shadow:0 0 5px '+dotColor:''}"></span>LoRa Gateway
         </div>
-        <div class="wov-meta">${isOnline?'Online':'Offline'} · Cellular gateway</div>
+        <div class="wov-meta">${isOnline?'Online':'Offline'}</div>
       </div>
       <div class="wov-gateway-data">
         <div class="wov-gateway-row"><span>Last Connect</span><span>${s.lastConnect?fmtShort(s.lastConnect):'—'}</span></div>
@@ -1332,8 +1333,6 @@ function renderGatewayPage(well){
           <span>Model ${well.model}</span>
           <span style="color:rgba(106,128,153,0.4)">·</span>
           <span>Serial ${well.loggerId}</span>
-          <span style="color:rgba(106,128,153,0.4)">·</span>
-          <span>IMEI ${well.imei}</span>
         </div>
       </div>
       
@@ -1374,6 +1373,24 @@ function renderGatewayPage(well){
         </div>
       </div>
 
+      <!-- Battery Voltage Chart -->
+      <div class="chart-section">
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Battery Voltage</div>
+              <div class="chart-hint">Drag to zoom · Double-click to reset</div>
+            </div>
+          </div>
+          <div class="chart-body">
+            <button class="zoom-reset" id="zr-${voltChartId}">Reset zoom</button>
+            <div class="chart-svg-wrap" id="${voltChartId}">
+              ${!s.voltObs.length ? '<div class="offline-chart"><span style="color:var(--muted)">No voltage data available</span></div>' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Unit Temperature Chart -->
       <div class="chart-section">
         <div class="chart-panel">
@@ -1395,24 +1412,6 @@ function renderGatewayPage(well){
             <button class="zoom-reset" id="zr-${tempChartId}">Reset zoom</button>
             <div class="chart-svg-wrap" id="${tempChartId}">
               ${!s.tempObs.length ? '<div class="offline-chart"><span style="color:var(--muted)">No temperature data available</span></div>' : ''}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Battery Voltage Chart -->
-      <div class="chart-section">
-        <div class="chart-panel">
-          <div class="chart-header">
-            <div>
-              <div class="chart-title">Battery Voltage</div>
-              <div class="chart-hint">Drag to zoom · Double-click to reset</div>
-            </div>
-          </div>
-          <div class="chart-body">
-            <button class="zoom-reset" id="zr-${voltChartId}">Reset zoom</button>
-            <div class="chart-svg-wrap" id="${voltChartId}">
-              ${!s.voltObs.length ? '<div class="offline-chart"><span style="color:var(--muted)">No voltage data available</span></div>' : ''}
             </div>
           </div>
         </div>
