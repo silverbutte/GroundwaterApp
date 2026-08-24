@@ -143,6 +143,40 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .wov-gateway-row span:first-child{text-align:left;white-space:nowrap}
 .wov-gateway-row span:last-child{color:var(--text);font-weight:500;text-align:right;min-width:0}
 
+/* ── SILVER BUTTE WEATHER STATION ── */
+.wb-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:24px;margin-bottom:24px;animation:fadeUp 0.5s ease both}
+.wb-panel::before{content:'';display:block;height:2px;background:linear-gradient(90deg,transparent,var(--accent),var(--success),transparent)}
+.wb-panel-head{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.wb-panel-title{font-family:var(--font);font-size:16px;font-weight:600;color:var(--text)}
+.wb-panel-meta{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.08em;margin-top:3px}
+.wb-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.wb-period-group,.wb-view-group{display:flex;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:7px;overflow:hidden}
+.wb-period-btn,.wb-view-btn{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:5px 10px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:background 0.15s,color 0.15s;border-right:1px solid var(--border)}
+.wb-period-btn:last-child,.wb-view-btn:last-child{border-right:none}
+.wb-period-btn:hover,.wb-view-btn:hover{color:var(--text);background:rgba(79,163,224,0.1)}
+.wb-period-btn.active{background:var(--accent);color:#fff}
+.wb-view-btn.active{background:rgba(79,163,224,0.22);color:var(--accent)}
+.wb-chart-wrap{padding:12px 14px 8px;position:relative}
+.wb-canvas-box{position:relative;height:260px}
+.wb-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(17,24,33,0.75);font-family:var(--mono);font-size:10px;letter-spacing:0.12em;color:var(--muted);z-index:10;border-radius:6px}
+.wb-footer{padding:9px 20px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.wb-footer-src{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.wb-footer-src a{color:var(--accent);text-decoration:none}
+.wb-footer-src a:hover{text-decoration:underline}
+.wb-hint{font-family:var(--mono);font-size:9px;color:var(--muted);opacity:0.7}
+.wb-heatmap-wrap{padding:12px 16px;overflow-x:auto}
+.wb-hm-grid{display:flex;gap:3px}
+.wb-hm-week{display:flex;flex-direction:column;gap:3px}
+.wb-hm-cell{width:11px;height:11px;border-radius:2px;cursor:pointer;transition:opacity 0.15s;flex-shrink:0}
+.wb-hm-cell:hover{opacity:0.75}
+.wb-hm-days{display:flex;flex-direction:column;gap:3px;margin-right:4px;margin-top:15px;font-family:var(--mono);font-size:9px;color:var(--muted)}
+.wb-hm-day{height:11px;display:flex;align-items:center}
+.wb-hm-legend{display:flex;align-items:center;gap:5px;margin-top:8px;font-family:var(--mono);font-size:9px;color:var(--muted)}
+.wb-hm-legend-swatch{width:11px;height:11px;border-radius:2px}
+.wb-tooltip-pill{position:fixed;z-index:9999;pointer-events:none;background:var(--surface2);border:1px solid rgba(79,163,224,0.4);border-radius:10px;padding:10px 14px;font-family:var(--mono);font-size:12px;color:var(--text);box-shadow:0 8px 30px rgba(0,0,0,0.4);opacity:0;transition:opacity 0.12s;white-space:nowrap}
+.wb-tip-date{color:var(--muted);font-size:10px;margin-bottom:4px}
+@media(max-width:640px){.wb-panel-head{align-items:stretch}.wb-controls{width:100%}.wb-period-group,.wb-view-group{flex:1}.wb-period-btn,.wb-view-btn{flex:1;padding:6px 8px}.wb-canvas-box{height:210px}.wb-canvas-box canvas{height:100%!important}}
+
 /* ── MAP MARKER DOTS ── */
 .map-dot-wrap{position:relative;width:14px;height:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .map-dot{width:12px;height:12px;border-radius:50%;position:relative;z-index:2;flex-shrink:0}
@@ -425,6 +459,50 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
     </div>
 
+    <div class="wb-panel" id="wb-precip-panel">
+      <div class="wb-panel-head">
+        <div>
+          <div class="wb-panel-title">Silver Butte Weather Station · Precipitation</div>
+          <div class="wb-panel-meta">WRCC Station OR SIL · Daily precipitation and annual accumulation</div>
+        </div>
+        <div class="wb-controls">
+          <div class="wb-view-group">
+            <button class="wb-view-btn active" data-chart="precip" data-view="bar" onclick="wbSetView('precip','bar',this)">Bar</button>
+            <button class="wb-view-btn" data-chart="precip" data-view="heat" onclick="wbSetView('precip','heat',this)">Heatmap</button>
+          </div>
+          <div class="wb-period-group">
+            <button class="wb-period-btn" data-chart="precip" data-p="7" onclick="wbSetPeriod('precip','7',this)">7D</button>
+            <button class="wb-period-btn active" data-chart="precip" data-p="30" onclick="wbSetPeriod('precip','30',this)">30D</button>
+            <button class="wb-period-btn" data-chart="precip" data-p="365" onclick="wbSetPeriod('precip','365',this)">1Y</button>
+            <button class="wb-period-btn" data-chart="precip" data-p="all" onclick="wbSetPeriod('precip','all',this)">All</button>
+          </div>
+          <div class="wb-view-group" id="wb-precip-stats-group">
+            <button class="wb-view-btn" id="wb-precip-stats-btn" onclick="wbTogglePrecipStats(this)">Stats</button>
+          </div>
+        </div>
+      </div>
+      <div class="wb-chart-wrap" id="wb-precip-bar-wrap">
+        <div class="wb-canvas-box">
+          <canvas id="wb-precip-canvas" height="78"></canvas>
+          <div class="wb-loading" id="wb-precip-loading">LOADING…</div>
+          <svg id="wb-precip-xhair" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;">
+            <line id="wb-precip-vline" x1="0" y1="0" x2="0" y2="100%" stroke="rgba(79,163,224,0.45)" stroke-width="1" stroke-dasharray="4,3" opacity="0"/>
+          </svg>
+        </div>
+      </div>
+      <div class="wb-heatmap-wrap" id="wb-precip-heat-wrap" style="display:none;">
+        <div id="wb-heatmap-container" style="display:flex;"></div>
+      </div>
+      <div class="wb-footer">
+        <div class="wb-footer-src">
+          <a href="https://wrcc.dri.edu/cgi-bin/rawMAIN.pl?orOSIL" target="_blank">WRCC Silver Butte</a>
+          &nbsp;·&nbsp;
+          <a href="https://raw.githubusercontent.com/silverbutte/weather-data/refs/heads/main/daily_export.csv" target="_blank">Daily CSV ↗</a>
+        </div>
+        <div class="wb-hint">Click &amp; drag to zoom · Double-click to reset</div>
+      </div>
+    </div>
+
     <div class="sg-widget">
       <div id="sg-inner">
         <div style="padding:2rem;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.1em">FETCHING STREAM DATA…</div>
@@ -565,6 +643,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 <div class="chart-tooltip" id="globalTip">
   <div class="tip-date" id="tipDate"></div>
   <div id="tipRows"></div>
+</div>
+<div class="wb-tooltip-pill" id="wb-tip">
+  <div class="wb-tip-date" id="wb-tip-date"></div>
+  <div id="wb-tip-val"></div>
 </div>
 
 <script>
@@ -1381,6 +1463,11 @@ function renderGatewayPage(well){
               <div class="chart-title">Battery Voltage</div>
               <div class="chart-hint">Drag to zoom · Double-click to reset</div>
             </div>
+            <div class="chart-controls">
+              <div class="range-btns">
+                ${['7d','30d','all'].map(r=>`<button class="rbtn ${s.range===r?'active':''}" onclick="changeRange('${well.id}','${r}')">${r==='7d'?'7D':r==='30d'?'30D':'All'}</button>`).join('')}
+              </div>
+            </div>
           </div>
           <div class="chart-body">
             <button class="zoom-reset" id="zr-${voltChartId}">Reset zoom</button>
@@ -1403,9 +1490,6 @@ function renderGatewayPage(well){
               <button class="thr-toggle" id="tmp-unit-btn-${well.id}" onclick="toggleTempUnit('${well.id}')" style="border-color:rgba(224,168,79,0.35);background:rgba(224,168,79,0.08);color:#e0a84f">
                 ${tempUnitState[well.id] === 'F' ? '°F / °C' : '°C / °F'}
               </button>
-              <div class="range-btns">
-                ${['7d','30d','all'].map(r=>`<button class="rbtn ${s.range===r?'active':''}" onclick="changeRange('${well.id}','${r}')">${r==='7d'?'7D':r==='30d'?'30D':'All'}</button>`).join('')}
-              </div>
             </div>
           </div>
           <div class="chart-body">
@@ -3104,6 +3188,275 @@ window.addEventListener('load',()=>{
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script>
 (function(){
+  'use strict';
+  const WB_DAILY_URL = 'https://raw.githubusercontent.com/silverbutte/weather-data/refs/heads/main/daily_export.csv';
+  let wbDaily = [];
+  let wbPrecipChart = null;
+  let wbPeriod = { precip:'30' };
+  let wbView = { precip:'bar' };
+  let wbPrecipShowStats = false;
+  let wbPrecipStatsByMD = {};
+
+  function wbParseDaily(csv){
+    return csv.trim().split('\n').slice(1).map(line=>{
+      const p=line.replace(/\r$/,'').split(',');
+      const precipVal=parseFloat(p[13]);
+      return {
+        dt:new Date(p[0]+'T12:00:00'),
+        precip:isNaN(precipVal) ? 0 : precipVal,
+      };
+    }).filter(d=>d.dt && !isNaN(d.dt) && d.dt.getFullYear()>=1990);
+  }
+
+  function wbFilterDaily(p){
+    if(p==='all') return wbDaily;
+    const cut=new Date();
+    cut.setDate(cut.getDate()-parseInt(p,10));
+    return wbDaily.filter(d=>d.dt>=cut);
+  }
+
+  function wbCalculatePrecipStats(){
+    const yearAccums={}, byMD={};
+    [...wbDaily].sort((a,b)=>a.dt-b.dt).forEach(d=>{
+      const key=d.dt.toISOString().slice(0,10);
+      const yr=d.dt.getFullYear();
+      yearAccums[yr]=(yearAccums[yr]||0)+(d.precip||0);
+      const md=key.slice(5,10);
+      if(!byMD[md]) byMD[md]=[];
+      byMD[md].push(+yearAccums[yr].toFixed(2));
+    });
+    wbPrecipStatsByMD={};
+    for(const [md,vals] of Object.entries(byMD)){
+      const sum=vals.reduce((a,b)=>a+b,0);
+      wbPrecipStatsByMD[md]={min:Math.min(...vals),max:Math.max(...vals),avg:sum/vals.length};
+    }
+  }
+
+  function wbXAxis(p){
+    const unit=p==='7'||p==='30'?'day':p==='365'?'month':'year';
+    return {
+      type:'time',
+      time:{unit,displayFormats:{day:'MMM d',month:'MMM yy',year:'yyyy'}},
+      grid:{color:'rgba(255,255,255,0.04)'},
+      ticks:{color:'#6a8099',font:{family:"'DM Mono',monospace",size:10},maxTicksLimit:p==='7'?7:10},
+      border:{color:'rgba(255,255,255,0.07)'},
+    };
+  }
+
+  function wbYAxis(suffix, extra){
+    return Object.assign({
+      grid:{color:'rgba(255,255,255,0.04)'},
+      ticks:{color:'#6a8099',font:{family:"'DM Mono',monospace",size:10},callback:v=>(+v).toFixed(1)+(suffix||'')},
+      border:{color:'rgba(255,255,255,0.07)'},
+    }, extra||{});
+  }
+
+  function wbSetLoading(show, message){
+    const el=document.getElementById('wb-precip-loading');
+    if(!el) return;
+    el.style.display=show?'flex':'none';
+    if(message) el.textContent=message;
+  }
+
+  function wbHideCrosshair(){
+    document.getElementById('wb-precip-vline')?.setAttribute('opacity','0');
+    const tip=document.getElementById('wb-tip');
+    if(tip) tip.style.opacity='0';
+  }
+
+  function wbBuildPrecip(p){
+    const data=wbFilterDaily(p);
+    const yesterday=new Date();
+    yesterday.setDate(yesterday.getDate()-1);
+    yesterday.setHours(12,0,0,0);
+
+    let labels=[];
+    if(p==='all'){
+      labels=data.map(d=>d.dt);
+    }else{
+      const start=new Date(yesterday);
+      start.setDate(start.getDate()-parseInt(p,10)+1);
+      start.setHours(12,0,0,0);
+      for(let d=new Date(start); d<=yesterday; d.setDate(d.getDate()+1)) labels.push(new Date(d));
+    }
+
+    const byDate={};
+    data.forEach(d=>{ byDate[d.dt.toISOString().slice(0,10)] = d.precip || 0; });
+    if(p!=='all'){
+      labels.forEach(d=>{
+        const key=d.toISOString().slice(0,10);
+        if(!(key in byDate)) byDate[key]=0;
+      });
+    }
+    labels=labels.sort((a,b)=>a-b);
+
+    const bars=labels.map(d=>byDate[d.toISOString().slice(0,10)] ?? 0);
+    const cumul=[];
+    let accum=0, currentYear=null;
+    labels.forEach((d,i)=>{
+      const yr=d.getFullYear();
+      if(currentYear!==yr){ currentYear=yr; accum=0; }
+      accum+=bars[i]||0;
+      cumul.push(+accum.toFixed(2));
+    });
+
+    const maxVals=[], avgVals=[], minVals=[];
+    labels.forEach(d=>{
+      const stats=wbPrecipStatsByMD[d.toISOString().slice(5,10)];
+      maxVals.push(stats?stats.max:null);
+      avgVals.push(stats?stats.avg:null);
+      minVals.push(stats?stats.min:null);
+    });
+
+    const canvas=document.getElementById('wb-precip-canvas');
+    if(!canvas) return;
+    if(wbPrecipChart){ wbPrecipChart.destroy(); wbPrecipChart=null; }
+    const ctx=canvas.getContext('2d');
+    const barGrad=ctx.createLinearGradient(0,0,0,canvas.offsetHeight||100);
+    barGrad.addColorStop(0,'rgba(79,163,224,0.9)');
+    barGrad.addColorStop(1,'rgba(79,163,224,0.4)');
+
+    const datasets=[
+      {label:'Daily Precip (in)',data:bars,backgroundColor:barGrad,borderColor:'transparent',borderRadius:2,barPercentage:0.85,categoryPercentage:labels.length<=10?0.5:labels.length<=30?0.75:0.95,yAxisID:'y'},
+      {label:'Annual Accum. (in)',data:cumul,type:'line',borderColor:'#4fada3',backgroundColor:'rgba(79,173,163,0.08)',borderWidth:2,pointRadius:0,tension:0.25,yAxisID:'y1'},
+    ];
+    if(wbPrecipShowStats){
+      datasets.push(
+        {label:'Max Accum. (in)',data:maxVals,type:'line',borderColor:'rgba(224,168,79,0.5)',borderDash:[5,4],borderWidth:1.4,pointRadius:0,tension:0.25,yAxisID:'y1'},
+        {label:'Avg Accum. (in)',data:avgVals,type:'line',borderColor:'rgba(176,204,224,0.55)',borderDash:[3,3],borderWidth:1.4,pointRadius:0,tension:0.25,yAxisID:'y1'},
+        {label:'Min Accum. (in)',data:minVals,type:'line',borderColor:'rgba(106,128,153,0.55)',borderDash:[2,4],borderWidth:1.2,pointRadius:0,tension:0.25,yAxisID:'y1'}
+      );
+    }
+
+    wbPrecipChart=new Chart(canvas,{
+      type:'bar',
+      data:{labels,datasets},
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        scales:{
+          x:wbXAxis(p),
+          y:wbYAxis(' in',{position:'left',beginAtZero:true,title:{display:true,text:'Daily',color:'#6a8099',font:{family:"'DM Mono',monospace",size:10}}}),
+          y1:wbYAxis(' in',{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'Annual Accum.',color:'#4fada3',font:{family:"'DM Mono',monospace",size:10}}}),
+        },
+        plugins:{
+          legend:{display:true,labels:{color:'#6a8099',font:{family:"'DM Mono',monospace",size:10},boxWidth:12,usePointStyle:true}},
+          tooltip:{enabled:false},
+          zoom:{zoom:{drag:{enabled:true,backgroundColor:'rgba(79,163,224,0.12)',borderColor:'rgba(79,163,224,0.5)',borderWidth:1},mode:'x'}},
+        },
+      },
+    });
+
+    canvas.addEventListener('dblclick',()=>wbPrecipChart?.resetZoom());
+    canvas.onmousemove=function(event){
+      const chart=wbPrecipChart;
+      if(!chart) return;
+      const rect=chart.canvas.getBoundingClientRect();
+      const mouseX=event.clientX-rect.left;
+      const area=chart.chartArea;
+      if(!area || mouseX<area.left || mouseX>area.right){ wbHideCrosshair(); return; }
+      const vline=document.getElementById('wb-precip-vline');
+      if(vline){ vline.setAttribute('x1',mouseX); vline.setAttribute('x2',mouseX); vline.setAttribute('opacity','1'); }
+      const xVal=chart.scales.x.getValueForPixel(mouseX);
+      let nearestIdx=0, minDist=Infinity;
+      labels.forEach((lbl,i)=>{
+        const dist=Math.abs(new Date(lbl)-xVal);
+        if(dist<minDist){ minDist=dist; nearestIdx=i; }
+      });
+      const dt=new Date(labels[nearestIdx]);
+      const tip=document.getElementById('wb-tip');
+      document.getElementById('wb-tip-date').textContent=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      let html=`<span style="color:#4fa3e0">Daily: ${(bars[nearestIdx]||0).toFixed(2)} in</span><br><span style="color:#4fada3">Annual Cumul.: ${(cumul[nearestIdx]||0).toFixed(2)} in</span>`;
+      if(wbPrecipShowStats){
+        if(maxVals[nearestIdx]!=null) html+=`<br><span style="color:#e0a84f">Max Accum.: ${maxVals[nearestIdx].toFixed(2)} in</span>`;
+        if(avgVals[nearestIdx]!=null) html+=`<br><span style="color:#b0cce0">Avg Accum.: ${avgVals[nearestIdx].toFixed(2)} in</span>`;
+        if(minVals[nearestIdx]!=null) html+=`<br><span style="color:#6a8099">Min Accum.: ${minVals[nearestIdx].toFixed(2)} in</span>`;
+      }
+      document.getElementById('wb-tip-val').innerHTML=html;
+      const tipW=tip.offsetWidth||190;
+      tip.style.left=(event.clientX+tipW+20>window.innerWidth ? event.clientX-tipW-12 : event.clientX+16)+'px';
+      tip.style.top=Math.max(8,event.clientY-(tip.offsetHeight||80)/2)+'px';
+      tip.style.opacity='1';
+    };
+    canvas.onmouseleave=wbHideCrosshair;
+    wbSetLoading(false);
+  }
+
+  function wbBuildHeatmap(p){
+    const data=wbFilterDaily(p);
+    const byDate={};
+    data.forEach(d=>{ byDate[d.dt.toISOString().slice(0,10)] = d.precip || 0; });
+    const start=data[0]?.dt;
+    const end=data[data.length-1]?.dt;
+    const container=document.getElementById('wb-heatmap-container');
+    if(!container || !start || !end) return;
+    const colors=['rgba(255,255,255,0.05)','#1a3a5c','#1e5f99','#2e86cc','#4fa3e0','#7ec8f5','#a8daff'];
+    const colorFor=v=>!v?colors[0]:v<0.05?colors[1]:v<0.25?colors[2]:v<0.5?colors[3]:v<1?colors[4]:v<2?colors[5]:colors[6];
+    let html='<div class="wb-hm-days"><div class="wb-hm-day">M</div><div class="wb-hm-day">T</div><div class="wb-hm-day">W</div><div class="wb-hm-day">T</div><div class="wb-hm-day">F</div><div class="wb-hm-day">S</div><div class="wb-hm-day">S</div></div><div><div class="wb-hm-grid">';
+    const cur=new Date(start);
+    cur.setDate(cur.getDate()-((cur.getDay()+6)%7));
+    while(cur<=end){
+      html+='<div class="wb-hm-week">';
+      for(let i=0;i<7;i++){
+        const key=cur.toISOString().slice(0,10);
+        const val=byDate[key] || 0;
+        const muted=cur<start||cur>end ? 'opacity:0.25;' : '';
+        html+=`<div class="wb-hm-cell" title="${key}: ${val.toFixed(2)} in" style="background:${colorFor(val)};${muted}"></div>`;
+        cur.setDate(cur.getDate()+1);
+      }
+      html+='</div>';
+    }
+    html+='</div><div class="wb-hm-legend"><span>0</span>'+colors.map(c=>`<span class="wb-hm-legend-swatch" style="background:${c}"></span>`).join('')+'<span>2+ in</span></div></div>';
+    container.innerHTML=html;
+    wbSetLoading(false);
+  }
+
+  window.wbSetPeriod=function(chart,p,btn){
+    document.querySelectorAll(`.wb-period-btn[data-chart="${chart}"]`).forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    wbPeriod[chart]=p;
+    wbSetLoading(true,'LOADING…');
+    if(wbView.precip==='bar') wbBuildPrecip(p);
+    else wbBuildHeatmap(p);
+  };
+
+  window.wbSetView=function(chart,view,btn){
+    document.querySelectorAll(`.wb-view-btn[data-chart="${chart}"]`).forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    wbView[chart]=view;
+    document.getElementById('wb-precip-bar-wrap').style.display=view==='bar'?'':'none';
+    document.getElementById('wb-precip-heat-wrap').style.display=view==='heat'?'':'none';
+    document.getElementById('wb-precip-stats-group').style.display=view==='bar'?'':'none';
+    wbSetLoading(true,'LOADING…');
+    if(view==='bar') wbBuildPrecip(wbPeriod.precip);
+    else wbBuildHeatmap(wbPeriod.precip);
+  };
+
+  window.wbTogglePrecipStats=function(btn){
+    wbPrecipShowStats=!wbPrecipShowStats;
+    btn.classList.toggle('active', wbPrecipShowStats);
+    wbBuildPrecip(wbPeriod.precip);
+  };
+
+  (async function wbInit(){
+    const loading=document.getElementById('wb-precip-loading');
+    if(!loading) return;
+    try{
+      const res=await fetch(WB_DAILY_URL);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      wbDaily=wbParseDaily(await res.text()).sort((a,b)=>a.dt-b.dt);
+      wbCalculatePrecipStats();
+      wbBuildPrecip('30');
+    }catch(e){
+      loading.textContent='Unable to load Silver Butte precipitation data: '+e.message;
+      loading.style.color='var(--danger)';
+    }
+  })();
+})();
+</script>
+<script>
+  (function(){
   const SG_SITE_ID   = 'USGS-14310000';
   const SG_SITE_NAME = 'Cow Creek Near Riddle, OR';
   const SG_BASE_URL  = 'https://api.waterdata.usgs.gov/ogcapi/v0/collections/continuous/items';
