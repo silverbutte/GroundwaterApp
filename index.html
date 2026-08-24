@@ -494,6 +494,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
       <div class="wb-chart-wrap" id="wb-precip-bar-wrap">
         <div class="wb-canvas-box">
+          <button class="zoom-reset" id="zr-wb-precip" type="button">Reset zoom</button>
           <canvas id="wb-precip-canvas" height="78"></canvas>
           <div class="wb-loading" id="wb-precip-loading">LOADING…</div>
           <svg id="wb-precip-xhair" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;">
@@ -510,7 +511,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           &nbsp;·&nbsp;
           <a href="https://raw.githubusercontent.com/silverbutte/weather-data/refs/heads/main/daily_export.csv" target="_blank">Daily CSV ↗</a>
         </div>
-        <div class="wb-hint">Click &amp; drag to zoom · Double-click to reset</div>
+        <div class="wb-hint">Click &amp; drag or pinch to zoom · Double-click to reset</div>
       </div>
     </div>
 
@@ -3302,6 +3303,10 @@ window.addEventListener('load',()=>{
     if(tip) tip.style.opacity='0';
   }
 
+  function wbSetPrecipZoomed(isZoomed){
+    document.getElementById('zr-wb-precip')?.classList.toggle('visible', isZoomed);
+  }
+
   function wbBuildPrecip(p){
     const data=wbFilterDaily(p);
     const yesterday=new Date();
@@ -3382,12 +3387,31 @@ window.addEventListener('load',()=>{
         plugins:{
           legend:{display:true,labels:{color:'#6a8099',font:{family:"'DM Mono',monospace",size:10},boxWidth:12,usePointStyle:true}},
           tooltip:{enabled:false},
-          zoom:{zoom:{drag:{enabled:true,backgroundColor:'rgba(79,163,224,0.12)',borderColor:'rgba(79,163,224,0.5)',borderWidth:1},mode:'x'}},
+          zoom:{
+            zoom:{
+              drag:{enabled:true,backgroundColor:'rgba(79,163,224,0.12)',borderColor:'rgba(79,163,224,0.5)',borderWidth:1},
+              pinch:{enabled:true},
+              mode:'x',
+              onZoomComplete:()=>wbSetPrecipZoomed(true)
+            },
+            pan:{enabled:true,mode:'x',modifierKey:null,onPanComplete:()=>wbSetPrecipZoomed(true)}
+          },
         },
       },
     });
 
-    canvas.addEventListener('dblclick',()=>wbPrecipChart?.resetZoom());
+    const zrBtn=document.getElementById('zr-wb-precip');
+    if(zrBtn){
+      zrBtn.onclick=()=>{
+        wbPrecipChart?.resetZoom();
+        wbSetPrecipZoomed(false);
+      };
+      wbSetPrecipZoomed(false);
+    }
+    canvas.addEventListener('dblclick',()=>{
+      wbPrecipChart?.resetZoom();
+      wbSetPrecipZoomed(false);
+    });
     canvas.onmousemove=function(event){
       const chart=wbPrecipChart;
       if(!chart) return;
