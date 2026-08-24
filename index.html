@@ -165,6 +165,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .wb-stat-value.wb-max{color:#e0a84f}
 .wb-chart-wrap{padding:12px 14px 8px;position:relative}
 .wb-canvas-box{position:relative;height:260px}
+.wb-canvas-box canvas{touch-action:none}
 .wb-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(17,24,33,0.75);font-family:var(--mono);font-size:10px;letter-spacing:0.12em;color:var(--muted);z-index:10;border-radius:6px}
 .wb-footer{padding:9px 20px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
 .wb-footer-src{font-family:var(--mono);font-size:10px;color:var(--muted)}
@@ -3392,7 +3393,7 @@ window.addEventListener('load',()=>{
               mode:'x',
               onZoomComplete:()=>wbSetPrecipZoomed(true)
             },
-            pan:{enabled:true,mode:'x',modifierKey:null,onPanComplete:()=>wbSetPrecipZoomed(true)}
+            pan:{enabled:false}
           },
         },
       },
